@@ -17,10 +17,12 @@ interface Props {
   onOpen: (groupId: string, itemId: string) => void;
   onToggleKeep: (itemId: string) => void;
   onRestore: (ids: string[]) => void;
+  /** Shoot summary line shown at the top. */
+  summary: string;
 }
 
 /** The whole shoot at a glance: every burst as a row of frames. */
-export function Overview({ groups, labels, bursts, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore }: Props) {
+export function Overview({ groups, labels, bursts, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore, summary }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
 
   // Start where you were in the timeline.
@@ -44,13 +46,14 @@ export function Overview({ groups, labels, bursts, focusedId, currentItemId, sta
 
   return (
     <div className={`overview${keptOnly ? ' picks' : ''}`} ref={scroller}>
+      <p className="ov-summary muted small">{summary}</p>
       {groups.map((g) => {
         const kept = g.items.filter((id) => statusOf(id) === 'keep').length;
         const archived = g.items.filter((id) => statusOf(id) === 'archived');
         const label = labels.get(g.id) ?? '';
         const folder = g.visible[0]?.folder;
         return (
-          <section key={g.id} className={`ov-group${g.id === focusedId ? ' on' : ''}`} data-group={g.id}>
+          <section key={g.id} className={`ov-group${g.id === focusedId ? ' on' : ''}${kept > 0 ? ' has-kept' : ''}`} data-group={g.id}>
             <header className="ov-head">
               <span className="eyebrow">{g.kind === 'video' ? `VIDEO ${label}` : `BURST ${label} / ${String(bursts).padStart(2, '0')}`}</span>
               <strong>{clockTime(g.start)}</strong>
@@ -61,8 +64,17 @@ export function Overview({ groups, labels, bursts, focusedId, currentItemId, sta
               </span>
               {folder && <span className="muted ov-folder">{folder.split('/').join(' / ')}</span>}
               {archived.length > 0 && !keptOnly && (
-                <button className="restore-link" onClick={() => onRestore(archived)}>
-                  Restore {archived.length} archived
+                <button
+                  className="ov-restore"
+                  onClick={() => onRestore(archived)}
+                  title={`Restore ${plural(archived.length, 'archived photo')}`}
+                  aria-label={`Restore ${plural(archived.length, 'archived photo')}`}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5.5 3 2.5 6l3 3" />
+                    <path d="M2.5 6H10a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  {archived.length}
                 </button>
               )}
             </header>

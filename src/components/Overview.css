@@ -33,7 +33,6 @@
 .ov-group:not(.on) .ov-head .eyebrow { color: var(--muted); }
 .ov-kept { color: var(--accent); }
 .ov-folder::before { content: '·'; margin-right: 12px; }
-.ov-head .restore-link { margin-left: auto; height: 26px; }
 
 .ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
 /* Kept only: bigger tiles, for judging the picks. */
@@ -71,3 +70,26 @@
 .ov-keep:hover { background: var(--accent-soft); color: var(--accent); }
 .ov-tile.kept .ov-keep { opacity: 1; transform: none; background: var(--accent); color: var(--accent-ink); box-shadow: none; }
 .ov-tile.kept .ov-keep { animation: pop 180ms var(--ease-out) both; }
+
+/* Shoot summary at the top of the Overview */
+.ov-summary { padding-top: 14px; padding-bottom: 2px; }
+
+/* Rows with at least one keeper get a yellow line in front. */
+/* Rows sit 14px in so the keeper line fits inside them (rows use paint containment). */
+.ov-group { position: relative; padding-left: 14px; }
+.overview { padding-left: 10px; }
+.ov-summary { padding-left: 14px; }
+.ov-group.has-kept::before {
+  content: ''; position: absolute; left: 0; top: 22px; bottom: 22px; width: 3px; border-radius: 2px;
+  background: var(--accent); animation: fade-in 200ms var(--ease-out) both;
+}
+
+/* Restore archived: a small, clearly visible chip right after the burst details. */
+.ov-restore {
+  align-self: center; display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px 0 7px;
+  border-radius: 12px; font-size: 11.5px; font-weight: 600; color: var(--accent);
+  background: rgb(247 201 72 / 0.1); box-shadow: inset 0 0 0 1px rgb(247 201 72 / 0.35);
+  transition: background 140ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.ov-restore:hover { background: rgb(247 201 72 / 0.2); }
+.ov-restore:active { transform: scale(0.95); }

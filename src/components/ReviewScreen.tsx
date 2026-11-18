@@ -143,8 +143,11 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
 
   // Timeline / Overview ------------------------------------------------------
   const [view, setViewState] = useState<View>(readView);
+  // Opened a photo from the Overview: Esc in the timeline goes back there.
+  const [fromOverview, setFromOverview] = useState(false);
   const setView = useCallback((v: View) => {
     setViewState(v);
+    setFromOverview(false);
     try {
       localStorage.setItem(VIEW_KEY, v);
     } catch {
@@ -156,6 +159,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       dispatch({ type: 'focus', groupId });
       dispatch({ type: 'cursor', groupId, itemId });
       setView('timeline');
+      setFromOverview(true);
     },
     [dispatch, setView],
   );
@@ -186,6 +190,10 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       if (view === 'overview') {
         if (e.key === 'Escape') setView('timeline');
         return; // the timeline's keys don't apply to the grid
+      }
+      if (e.key === 'Escape' && fromOverview) {
+        setView('overview');
+        return;
       }
       if (!focused) return;
       const n = focused.visible.length;
@@ -231,7 +239,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen]);
+  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen, fromOverview]);
 
   // Toast stays mounted briefly after it's dismissed so it can animate out.
   const [toastShown, setToastShown] = useState(state.toast);
@@ -268,11 +276,6 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         <strong className="logo">BURST</strong>
         <div className="shoot">
           <h1 title={shoot.rootName}>{shoot.rootName}</h1>
-          <span className="muted small">
-            {shoot.items[0] && `${shortDate(shoot.items[0].time)} · `}
-            {plural(counts.photos, 'photo')} · {plural(labels.bursts, 'burst')} · {plural(counts.videos, 'video')}
-            {shoot.subfolders ? ` · ${plural(shoot.subfolders, 'folder')}` : ''}
-          </span>
         </div>
         <div className="view-switch" role="tablist" aria-label="View">
           <button role="tab" aria-selected={view === 'timeline'} onClick={() => setView('timeline')} title="Timeline (G)">
@@ -358,6 +361,16 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
           onOpen={openInTimeline}
           onToggleKeep={toggleKeepId}
           onRestore={restore}
+          summary={[
+            shoot.items[0] ? shortDate(shoot.items[0].time) : '',
+            plural(counts.photos, 'photo'),
+            plural(labels.bursts, 'burst'),
+            plural(counts.videos, 'video'),
+            shoot.subfolders ? plural(shoot.subfolders, 'folder') : '',
+            counts.keep ? `${counts.keep} kept` : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         />
       ) : (
       <>

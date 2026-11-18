@@ -122,10 +122,9 @@ export function SaveDialog({ shootName, kept, startIn, onClose }: Props) {
             <>
               <label className="save-label" htmlFor="zip-folder">Folder inside the ZIP</label>
               <input id="zip-folder" className="save-name zip" value={folderName} onChange={(e) => setFolderName(e.target.value)} spellCheck={false} />
-              <p className="save-hint muted small">
-                Unzip it next to <b>{shootName}</b> to get a <b>{zipFolder}</b> folder beside your shoot. Photos aren't re-compressed: the copies are identical to your originals.
-                {parts.length > 1 && ' This selection is large, so it comes in parts of up to 1.8 GB; unzip them all into the same place.'}
-              </p>
+              {parts.length > 1 && (
+                <p className="save-hint muted small">This selection is large, so it comes in parts of up to 1.8 GB. Unzip them all into the same place.</p>
+              )}
             </>
           ) : (
             <>
@@ -137,15 +136,6 @@ export function SaveDialog({ shootName, kept, startIn, onClose }: Props) {
               {newFolder && (
                 <input className="save-name" value={folderName} onChange={(e) => setFolderName(e.target.value)} aria-label="New folder name" spellCheck={false} />
               )}
-              <p className="save-hint muted small">
-                {newFolder ? (
-                  <>
-                    Next, pick where it goes. The picker opens in <b>{shootName}</b>; go up one level to put <b>{cleanName(folderName) || 'the new folder'}</b> right next to it.
-                  </>
-                ) : (
-                  <>Next, pick the folder to copy into. Files already there with the same size are skipped.</>
-                )}
-              </p>
             </>
           )}
           {phase.error && <p className="error">{phase.error}</p>}
