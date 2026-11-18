@@ -3,7 +3,7 @@ import { loadPreview, loadThumb, peekPreview, prefetchAround, setPreviewWidth } 
 import { useElementSize, useObjectUrl, useThumb } from '../lib/hooks';
 import type { VisibleGroup } from '../lib/store';
 import type { MediaItem, Status } from '../lib/types';
-import { clockTime, plural, seconds } from '../lib/format';
+import { clockTime, seconds } from '../lib/format';
 
 interface Props {
   groups: VisibleGroup[];
@@ -315,7 +315,6 @@ function Neighbour({ group, label, statusOf, x, w, midY, h, onClick, side }: { g
   const coverUrl = useThumb(cover);
   const coverW = Math.min(w * 0.72, h * 1.5);
   const ch = coverW / 1.5;
-  const kept = group.items.filter((id) => statusOf(id) === 'keep').length;
   const shoulders = Math.min(5, Math.floor(items.length / 2));
   const st = Math.min(14, (w - coverW) / 2 / Math.max(1, shoulders));
   const coverLeft = x + (w - coverW) / 2;
@@ -334,7 +333,7 @@ function Neighbour({ group, label, statusOf, x, w, midY, h, onClick, side }: { g
         {group.kind === 'video' && <span className="play">▶</span>}
       </span>
       <span className="n-label" style={{ left: coverLeft - x, top: midY + ch / 2 + 16 }}>
-        <span>{label} · {group.kind === 'video' ? 'video' : `${plural(group.items.length, 'photo')} · ${kept} kept`}</span>
+        <span>{label}</span>
         <span className="muted small">{clockTime(group.start)}</span>
       </span>
     </button>

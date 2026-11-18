@@ -1,7 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react';
 import './ShortcutsOverlay.css';
-import { useThumb } from '../lib/hooks';
-import type { MediaItem } from '../lib/types';
 
 /* ============================================================================
  * Shortcuts overlay: the list on the left, a slowed-down demo of the hovered
@@ -22,9 +20,11 @@ interface Mini {
   pill: string | null;
   tap: number | null; // Overview cell being clicked
   toast: string | null;
+  /** Just reset for a new loop: jump there without animating. */
+  fresh: boolean;
 }
 
-const BASE: Mini = { frame: 3, kept: [], sweep: 'none', burst: 0, dir: 1, view: 'timeline', key: null, keyDown: false, pointer: null, pill: null, tap: null, toast: null };
+const BASE: Mini = { frame: 3, kept: [], sweep: 'none', burst: 0, dir: 1, view: 'timeline', key: null, keyDown: false, pointer: null, pill: null, tap: null, toast: null, fresh: true };
 
 type Step = [at: number, patch: Partial<Mini>];
 
@@ -53,19 +53,19 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
         id: 'archive',
         keys: ['A'],
         label: 'Archive the rest of the burst',
-        hint: 'Keepers stay, then the next burst',
+        hint: 'Everything not kept goes, keepers stay',
         start: { kept: [3] },
-        length: 4200,
-        steps: [...press(700, 'A', { sweep: 'sweeping' }), [2100, { sweep: 'none', burst: 1, dir: 1, kept: [] }]],
+        length: 3800,
+        steps: [...press(700, 'A', { sweep: 'sweeping' }), [1700, { sweep: 'gone' }]],
       },
       {
         id: 'undo',
         keys: ['⌘', 'Z'],
         label: 'Undo',
         hint: 'Every keep and archive',
-        start: { kept: [3] },
-        length: 4400,
-        steps: [...press(600, 'A', { sweep: 'sweeping' }), [1500, { sweep: 'gone' }], ...press(2300, '⌘ Z', { sweep: 'none', toast: 'Undid: archive' }), [3700, { toast: null }]],
+        start: { kept: [3], sweep: 'gone' },
+        length: 3800,
+        steps: [...press(900, '⌘ Z', { sweep: 'none', toast: 'Undid: archive' }), [2900, { toast: null }]],
       },
     ],
   },
@@ -142,7 +142,7 @@ function useDemo(s: Shortcut): Mini {
     let timers: number[] = [];
     const run = () => {
       setMini({ ...BASE, ...s.start });
-      timers = s.steps.map(([at, patch]) => window.setTimeout(() => setMini((m) => ({ ...m, ...patch })), at));
+      timers = s.steps.map(([at, patch]) => window.setTimeout(() => setMini((m) => ({ ...m, ...patch, fresh: false })), at));
       if (s.steps.length) timers.push(window.setTimeout(run, s.length));
     };
     run();
@@ -154,12 +154,10 @@ function useDemo(s: Shortcut): Mini {
 // ---------------------------------------------------------------------------
 
 interface Props {
-  frames: MediaItem[]; // current burst (for the demo)
-  nextFrames: MediaItem[]; // the burst after it
   onClose: () => void;
 }
 
-export function ShortcutsOverlay({ frames, nextFrames, onClose }: Props) {
+export function ShortcutsOverlay({ onClose }: Props) {
   const [active, setActive] = useState<Shortcut>(ALL[0]);
   const mini = useDemo(active);
   const panel = useRef<HTMLDivElement>(null);
@@ -210,7 +208,7 @@ export function ShortcutsOverlay({ frames, nextFrames, onClose }: Props) {
             ))}
           </ul>
           <div className="sc-preview" aria-hidden>
-            <MiniStage mini={mini} frames={frames} nextFrames={nextFrames} help={active.id === 'help'} showBurst={active.id === 'bursts'} />
+            <MiniStage mini={mini} help={active.id === 'help'} showBurst={active.id === 'bursts'} />
             <p className="sc-caption">
               <strong>{active.label}</strong>
               <span className="muted">Shown slowed down</span>
@@ -227,18 +225,15 @@ export function ShortcutsOverlay({ frames, nextFrames, onClose }: Props) {
 
 const SLIVERS = 4;
 
-function MiniStage({ mini, frames, nextFrames, help, showBurst }: { mini: Mini; frames: MediaItem[]; nextFrames: MediaItem[]; help: boolean; showBurst: boolean }) {
-  const burstFrames = mini.burst === 0 ? frames : nextFrames.length ? nextFrames : frames;
-  const shift = mini.burst === 1 && !nextFrames.length; // no next burst: tint the same frames
-  const at = (i: number) => burstFrames.length ? burstFrames[Math.max(0, Math.min(burstFrames.length - 1, i))] : undefined;
-  const n = Math.max(9, burstFrames.length);
+function MiniStage({ mini, help, showBurst }: { mini: Mini; help: boolean; showBurst: boolean }) {
+  const n = FRAMES;
   const frame = Math.min(mini.frame, n - 1);
   const kept = (i: number) => mini.kept.includes(i);
 
   return (
-    <div className={`mini${mini.sweep !== 'none' ? ` sweep-${mini.sweep}` : ''}`}>
+    <div className={`mini${mini.sweep !== 'none' ? ` sweep-${mini.sweep}` : ''}${mini.fresh ? ' fresh' : ''}`}>
       {mini.view === 'timeline' ? (
-        <div className={`mini-burst ${mini.dir > 0 ? 'from-right' : 'from-left'}${shift ? ' shift' : ''}`} key={`b${mini.burst}`}>
+        <div className={`mini-burst ${mini.dir > 0 ? 'from-right' : 'from-left'}`} key={`b${mini.burst}`}>
           {showBurst && (
             <div className="mini-head">
               <span>BURST {String(mini.burst + 1).padStart(2, '0')}</span>
@@ -247,11 +242,11 @@ function MiniStage({ mini, frames, nextFrames, help, showBurst }: { mini: Mini; 
           <div className="mini-wave">
             {Array.from({ length: SLIVERS }, (_, k) => k + 1).map((k) => (
               <span key={`l${k}`}>
-                {frame - k >= 0 && <MiniTile item={at(frame - k)} className={`mini-sliver left${kept(frame - k) ? ' kept' : ''}`} style={{ ['--k' as string]: k }} />}
-                {frame + k < n && <MiniTile item={at(frame + k)} className={`mini-sliver right${kept(frame + k) ? ' kept' : ''}`} style={{ ['--k' as string]: k }} />}
+                {frame - k >= 0 && <MiniTile frame={frame - k} burst={mini.burst} className={`mini-sliver left${kept(frame - k) ? ' kept' : ''}`} style={{ ['--k' as string]: k }} />}
+                {frame + k < n && <MiniTile frame={frame + k} burst={mini.burst} className={`mini-sliver right${kept(frame + k) ? ' kept' : ''}`} style={{ ['--k' as string]: k }} />}
               </span>
             ))}
-            <MiniTile item={at(frame)} className={`mini-photo${kept(frame) ? ' kept' : ''}`}>
+            <MiniTile frame={frame} burst={mini.burst} className={`mini-photo${kept(frame) ? ' kept' : ''}`}>
               {kept(frame) && <span className="mini-badge" key={`k${frame}`}>✓ Kept</span>}
               {mini.pill && <span className="mini-pill">{mini.pill}</span>}
               {mini.pointer && (
@@ -264,14 +259,14 @@ function MiniStage({ mini, frames, nextFrames, help, showBurst }: { mini: Mini; 
           </div>
           <div className="mini-strip">
             {Array.from({ length: 9 }, (_, i) => i).map((i) => (
-              <MiniTile key={i} item={at(i)} className={`mini-thumb${i === frame ? ' current' : ''}${kept(i) ? ' kept' : ''}`} />
+              <MiniTile key={i} frame={i} burst={mini.burst} className={`mini-thumb${i === frame ? ' current' : ''}${kept(i) ? ' kept' : ''}`} />
             ))}
           </div>
         </div>
       ) : (
         <div className="mini-grid">
           {Array.from({ length: 12 }, (_, i) => i).map((i) => (
-            <MiniTile key={i} item={at(i)} className={`mini-cell${kept(i) ? ' kept' : ''}${mini.tap === i ? ' tapped' : ''}`} style={{ animationDelay: `${i * 40}ms` }}>
+            <MiniTile key={i} frame={i < 8 ? i : (i - 8) * 3} burst={i < 8 ? 0 : 1} className={`mini-cell${kept(i) ? ' kept' : ''}${mini.tap === i ? ' tapped' : ''}`} style={{ animationDelay: `${i * 40}ms` }}>
               {mini.tap === i && (
                 <span className="mini-pointer down">
                   <i />
@@ -293,10 +288,27 @@ function MiniStage({ mini, frames, nextFrames, help, showBurst }: { mini: Mini; 
   );
 }
 
-const MiniTile = memo(function MiniTile({ item, className, style, children }: { item?: MediaItem; className: string; style?: React.CSSProperties; children?: React.ReactNode }) {
-  const url = useThumb(item);
+/*
+ * Demo frames are crops of one surf photo that pan left → right through a burst, so stepping
+ * frames looks like motion. Each burst gets its own, very different tint; within a burst the
+ * tint drifts slightly from frame to frame.
+ */
+const FRAMES = 12;
+const BURST_HUE = [0, 150];
+
+const MiniTile = memo(function MiniTile({ frame, burst, className, style, children }: { frame: number; burst: number; className: string; style?: React.CSSProperties; children?: React.ReactNode }) {
+  const f = Math.max(0, Math.min(FRAMES - 1, frame));
+  const hue = BURST_HUE[burst % BURST_HUE.length] + f * 3;
   return (
-    <span className={className} style={{ ...style, backgroundImage: url ? `url(${url})` : undefined }}>
+    <span
+      className={`${className} demo-frame`}
+      style={{
+        ...style,
+        ['--pos' as string]: `${(f / (FRAMES - 1)) * 100}% 62%`,
+        ['--hue' as string]: `${hue}deg`,
+        ['--sat' as string]: 1.05 + f * 0.015,
+      }}
+    >
       {children}
     </span>
   );

@@ -42,7 +42,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     return { map: m, bursts: b, videos: v };
   }, [groups]);
   const burstLabel = useCallback(
-    (g: VisibleGroup) => (g.kind === 'video' ? `VIDEO ${labels.map.get(g.id)}` : `BURST ${labels.map.get(g.id)} / ${pad2(labels.bursts)}`),
+    (g: VisibleGroup) => (g.kind === 'video' ? `VIDEO ${labels.map.get(g.id)}` : `BURST ${labels.map.get(g.id)}`),
     [labels],
   );
 
@@ -353,7 +353,6 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         <Overview
           groups={visibleGroups}
           labels={labels.map}
-          bursts={labels.bursts}
           focusedId={focused?.id}
           currentItemId={current?.id}
           statusOf={statusOf}
@@ -456,11 +455,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       )}
 
       {shortcutsOpen && (
-        <ShortcutsOverlay
-          frames={(focused?.kind === 'photo' ? focused.visible : visibleGroups.find((g) => g.kind === 'photo')?.visible ?? []).slice(0, 12)}
-          nextFrames={(visibleGroups.slice(focusIdx + 1).find((g) => g.kind === 'photo')?.visible ?? []).slice(0, 12)}
-          onClose={() => setShortcutsOpen(false)}
-        />
+        <ShortcutsOverlay onClose={() => setShortcutsOpen(false)} />
       )}
 
       {saving && <SaveDialog shootName={shoot.rootName} kept={keptItems} startIn={folderHandle} onClose={() => setSaving(false)} />}

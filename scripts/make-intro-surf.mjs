@@ -1,4 +1,5 @@
-// Draws the app's keeper frame + "✓ Keep" badge around one surfer and exports a WebP for the intro page.
+// Draws the app's keeper frame + "✓ Keep" badge around one surfer and exports a WebP for the intro page,
+// plus a clean small copy used by the shortcut demos.
 // Usage: node scripts/make-intro-surf.mjs <source image> [out=public/assets/intro-surf.webp]
 import sharp from 'sharp';
 
@@ -45,3 +46,9 @@ await sharp(resized)
 
 const out = await sharp(OUT).metadata();
 console.log(`${OUT} ${out.width}×${out.height}`);
+
+// Clean, small copy (no frame) for the shortcut demos: they pan across it and tint it per burst.
+const DEMO = 'public/assets/demo-surf.webp';
+await sharp(resized).resize({ width: 960 }).webp({ quality: 78, effort: 6 }).toFile(DEMO);
+const d = await sharp(DEMO).metadata();
+console.log(`${DEMO} ${d.width}×${d.height}`);

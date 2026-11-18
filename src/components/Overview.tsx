@@ -8,7 +8,6 @@ import { clockTime, plural, seconds } from '../lib/format';
 interface Props {
   groups: VisibleGroup[];
   labels: Map<string, string>;
-  bursts: number;
   focusedId?: string;
   currentItemId?: string;
   statusOf: (id: string) => Status;
@@ -22,7 +21,7 @@ interface Props {
 }
 
 /** The whole shoot at a glance: every burst as a row of frames. */
-export function Overview({ groups, labels, bursts, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore, summary }: Props) {
+export function Overview({ groups, labels, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore, summary }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
 
   // Start where you were in the timeline.
@@ -55,13 +54,9 @@ export function Overview({ groups, labels, bursts, focusedId, currentItemId, sta
         return (
           <section key={g.id} className={`ov-group${g.id === focusedId ? ' on' : ''}${kept > 0 ? ' has-kept' : ''}`} data-group={g.id}>
             <header className="ov-head">
-              <span className="eyebrow">{g.kind === 'video' ? `VIDEO ${label}` : `BURST ${label} / ${String(bursts).padStart(2, '0')}`}</span>
+              <span className="eyebrow">{g.kind === 'video' ? `VIDEO ${label}` : `BURST ${label}`}</span>
               <strong>{clockTime(g.start)}</strong>
               {g.kind === 'photo' && g.items.length > 1 && <span className="muted">{seconds(g.end - g.start)}</span>}
-              <span className="muted">
-                {g.kind === 'photo' ? plural(g.items.length, 'photo') : 'video'}
-                {kept > 0 && <span className="ov-kept"> · {kept} kept</span>}
-              </span>
               {folder && <span className="muted ov-folder">{folder.split('/').join(' / ')}</span>}
               {archived.length > 0 && !keptOnly && (
                 <button
@@ -74,7 +69,7 @@ export function Overview({ groups, labels, bursts, focusedId, currentItemId, sta
                     <path d="M5.5 3 2.5 6l3 3" />
                     <path d="M2.5 6H10a3.5 3.5 0 0 1 0 7H6" />
                   </svg>
-                  {archived.length}
+                  Unarchive {archived.length}
                 </button>
               )}
             </header>

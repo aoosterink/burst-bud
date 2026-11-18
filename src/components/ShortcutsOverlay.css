@@ -51,7 +51,6 @@
 .mini-burst { position: absolute; inset: 0; }
 .mini-burst.from-right { animation: mini-in-right 700ms var(--ease-out) both; }
 .mini-burst.from-left { animation: mini-in-left 700ms var(--ease-out) both; }
-.mini-burst.shift { filter: hue-rotate(70deg); }
 @keyframes mini-in-right { from { opacity: 0; transform: translateX(70px); } }
 @keyframes mini-in-left { from { opacity: 0; transform: translateX(-70px); } }
 
@@ -133,3 +132,16 @@
 /* Overview cell being clicked (Esc demo) */
 .mini-cell.tapped { outline: 2px solid var(--text); transform: scale(0.96); transition: transform 200ms var(--ease-out); }
 .mini-cell .mini-pointer { top: 50%; left: 50%; }
+
+/* Demo frames: crops of the surf photo (see MiniTile). The tinted photo sits on its own layer
+   so the badge, pill and pointer inside a frame keep their real colours. */
+.demo-frame { background-image: none; overflow: visible; }
+.demo-frame::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 0; pointer-events: none;
+  background: url('/assets/demo-surf.webp') var(--pos, 50% 62%) / auto 170% no-repeat;
+  filter: hue-rotate(var(--hue, 0deg)) saturate(var(--sat, 1));
+}
+.demo-frame > * { z-index: 1; }
+
+/* A demo loop restarting jumps straight to its start state (no reverse sweep or slide). */
+.mini.fresh *, .mini.fresh *::before, .mini.fresh *::after { transition: none !important; animation: none !important; }
