@@ -1,0 +1,165 @@
+/* Unbounded (SIL Open Font License), self-hosted: Latin, 700. */
+@font-face {
+  font-family: 'Unbounded';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/assets/fonts/unbounded-700-latin.woff2') format('woff2');
+}
+
+/* Import screen: landing-page hero. The burst runs full-bleed behind everything,
+   the title sits on the image, the import card floats on top at the right; the whole screen
+   is a drop target for a folder.
+   Fits one viewport (no scroll at ≥1280×800). Overrides the base import rules in index.css. */
+
+.import {
+  position: relative;
+  /* Geometry shared by the backdrop and the grid: content box and the left (image) column. */
+  --card-w: 440px;
+  --pad-x: max(48px, (100vw - 1320px) / 2 + 48px);
+  --col-w: calc(min(100vw, 1320px) - 96px - 40px - var(--card-w));
+}
+.import-foot { position: relative; z-index: 2; border: 0; }
+.import-foot { padding: 14px var(--pad-x); }
+.import-main {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) var(--card-w);
+  gap: 40px;
+  padding: 24px 48px;
+  max-width: 1320px;
+  align-items: center;
+}
+
+/* ---------- backdrop: the burst ---------- */
+.import-show {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: var(--bg);
+}
+/* The photo: anchored left so the framed keeper and the sharp centre surfer stay clear of the
+   import card on the right. intro-surf.webp is made by scripts/make-intro-surf.mjs. */
+.show-photo {
+  position: absolute;
+  inset: 0;
+  background: var(--bg) url('/assets/intro-surf.webp') left 58% / cover no-repeat;
+  animation: fade-in 600ms var(--ease-out) both;
+}
+/* Darken the edges so the title, the card and the footer stay readable. */
+.import-show::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(to bottom, rgb(10 16 24 / 0.7) 0, rgb(10 16 24 / 0.25) 200px, transparent 300px, transparent calc(100% - 200px), rgb(10 16 24 / 0.92) 100%),
+    linear-gradient(to right, transparent 55%, rgb(10 16 24 / 0.55) 100%);
+}
+
+.show-copy {
+  position: absolute;
+  z-index: 5;
+  left: var(--pad-x);
+  top: 52px;
+  max-width: min(640px, var(--col-w));
+  animation: rise 360ms var(--ease-out) both;
+}
+.show-copy h1 {
+  font-family: Unbounded, Inter, sans-serif;
+  font-size: clamp(40px, 4.3vw, 62px);
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  text-shadow: 0 2px 30px rgb(0 0 0 / 0.6);
+}
+.show-copy p {
+  margin-top: 12px;
+  font-family: Unbounded, Inter, sans-serif;
+  font-size: clamp(17px, 1.7vw, 24px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--accent);
+}
+
+/* ---------- right: import card, floating glass over the burst ---------- */
+.import-card {
+  grid-column: 2;
+  position: relative;
+  z-index: 1;
+  padding: 26px 28px;
+  background: rgb(17 26 37 / 0.8);
+  backdrop-filter: blur(20px) saturate(1.15);
+  -webkit-backdrop-filter: blur(20px) saturate(1.15);
+  box-shadow: 0 30px 90px rgb(0 0 0 / 0.55), inset 0 0 0 1px rgb(255 255 255 / 0.07);
+}
+.import-card h2 { font-size: 20px; margin-bottom: 6px; }
+.import-card > p.muted { font-size: 13px; }
+.import .resume { margin: -6px -6px 20px; padding: 14px 16px; }
+.import .resume h3 { font-size: 16px; margin: 4px 0 2px; }
+.import .folder-card, .import .dropzone { margin-top: 16px; padding: 16px 18px; }
+.import .dropzone { padding: 24px 18px; gap: 8px; }
+.import .dz-title { font-size: 17px; }
+
+/* Where to start: the folder picker is the one primary action on this screen. */
+.import .dropzone {
+  border: 0;
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: 0 10px 30px rgb(247 201 72 / 0.18);
+  transition: filter 150ms var(--ease-out), transform 140ms var(--ease-out), box-shadow 150ms var(--ease-out);
+}
+.import .dropzone:not(:disabled):hover { filter: brightness(1.05); background: var(--accent); box-shadow: 0 12px 36px rgb(247 201 72 / 0.26); }
+.import .dropzone:not(:disabled):active { transform: scale(0.985); }
+.import .dropzone .dz-title { display: inline-flex; align-items: center; gap: 10px; font-weight: 600; }
+.import .dropzone .dz-formats { color: rgb(31 23 2 / 0.72); }
+/* While scanning: neutral, not a faded yellow. */
+.import .dropzone:disabled { opacity: 1; background: var(--btn); color: var(--text); box-shadow: none; }
+.import .dropzone:disabled .dz-formats { color: var(--muted); }
+.import .folder-card h3 { font-size: 18px; margin: 6px 0 12px; }
+.import .check { margin: 16px 0; font-size: 13px; }
+.import-card hr { margin-bottom: 16px; }
+.import .h-sub { font-size: 15px; margin-bottom: 6px; }
+.import .gap-row { margin-bottom: 14px; }
+.import-card p.small + p.small { margin-top: 6px; }
+.import .primary.wide { margin-top: 18px; height: 44px; }
+.import .demo { margin-top: 10px; }
+
+/* ---------- drop target ---------- */
+.drop-veil {
+  position: absolute;
+  inset: 14px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  border: 2px dashed var(--accent);
+  border-radius: 18px;
+  background: rgb(10 16 24 / 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 140ms var(--ease-out);
+}
+.drop-veil span {
+  font-family: Unbounded, Inter, sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+  transform: scale(0.96);
+  transition: transform 200ms var(--ease-out);
+}
+.import.is-dragging .drop-veil { opacity: 1; }
+.import.is-dragging .drop-veil span { transform: none; }
+
+/* Narrow windows: the card alone, centred. */
+@media (max-width: 1000px) {
+  .import-main { grid-template-columns: minmax(0, var(--card-w)); justify-content: center; padding: 24px; }
+  .import-card { grid-column: 1; }
+  .import-show { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .show-copy, .show-photo { animation: none; }
+  .drop-veil, .drop-veil span { transition: none; }
+}

@@ -1,0 +1,72 @@
+/* ---------- Timeline / Overview switch (header) ---------- */
+.view-switch { display: inline-flex; flex: none; padding: 3px; gap: 2px; border-radius: var(--r); background: var(--panel); position: relative; }
+.view-switch button {
+  height: 34px; padding: 0 12px; border-radius: 5px; display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap;
+  transition: color 150ms var(--ease-out), background 150ms var(--ease-out);
+}
+.view-switch button:hover { color: var(--text); }
+.view-switch button[aria-selected='true'] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.view-switch svg { flex: none; }
+
+/* ---------- Overview page ---------- */
+.overview {
+  flex: 1; min-height: 0; overflow-y: auto; padding: 8px 24px 32px;
+  scrollbar-color: #2a3a4e transparent;
+  animation: fade-in 200ms var(--ease-out) both;
+}
+.overview.empty { display: grid; place-items: center; text-align: center; }
+.overview.empty h2 { font-size: 22px; font-weight: 600; margin-bottom: 8px; }
+
+.ov-group {
+  padding: 16px 0 20px; border-bottom: 1px solid var(--line);
+  /* Skip layout/paint for groups far off-screen: big shoots stay fast. */
+  content-visibility: auto; contain-intrinsic-size: auto 260px;
+}
+.ov-head {
+  position: sticky; top: -8px; z-index: 2; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 8px 0 12px; background: var(--bg); font-size: 12px;
+}
+.ov-head strong { font-size: 15px; font-weight: 600; }
+.ov-head .eyebrow { min-width: 104px; }
+.ov-group:not(.on) .ov-head .eyebrow { color: var(--muted); }
+.ov-kept { color: var(--accent); }
+.ov-folder::before { content: '·'; margin-right: 12px; }
+.ov-head .restore-link { margin-left: auto; height: 26px; }
+
+.ov-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 8px; }
+/* Kept only: bigger tiles, for judging the picks. */
+.overview.picks .ov-grid { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+
+.ov-tile { position: relative; animation: fade-in 220ms var(--ease-out) both; }
+.ov-img {
+  display: block; width: 100%; aspect-ratio: 3 / 2; border-radius: 4px; overflow: hidden; position: relative;
+  background: #142030; outline: 2px solid transparent; outline-offset: 0;
+  transition: outline-color 150ms var(--ease-out), transform 150ms var(--ease-out);
+}
+.ov-img img { width: 100%; height: 100%; object-fit: cover; display: block; animation: fade-in 200ms var(--ease-out) both; }
+.ov-img:hover { transform: translateY(-2px); }
+.ov-img:hover img { filter: brightness(1.08); }
+.ov-tile.current .ov-img { outline-color: var(--text); }
+.ov-tile.kept .ov-img { outline-color: var(--accent); }
+.ov-n {
+  position: absolute; left: 6px; bottom: 6px; font-size: 10px; font-weight: 500; padding: 2px 5px; border-radius: 3px;
+  background: rgb(10 16 24 / 0.75); color: var(--muted);
+}
+.ov-play {
+  position: absolute; inset: 0; margin: auto; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  background: rgb(0 0 0 / 0.55); color: var(--text); font-size: 15px; padding-left: 3px;
+}
+
+/* Keep toggle: shows on hover/focus, always shown on kept tiles. */
+.ov-keep {
+  position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 14px; font-weight: 700; line-height: 1;
+  background: rgb(10 16 24 / 0.8); color: var(--text); box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.18);
+  opacity: 0; transform: scale(0.85);
+  transition: opacity 140ms var(--ease-out), transform 140ms var(--ease-out), background 140ms var(--ease-out);
+}
+.ov-tile:hover .ov-keep, .ov-keep:focus-visible { opacity: 1; transform: none; }
+.ov-keep:hover { background: var(--accent-soft); color: var(--accent); }
+.ov-tile.kept .ov-keep { opacity: 1; transform: none; background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.ov-tile.kept .ov-keep { animation: pop 180ms var(--ease-out) both; }
