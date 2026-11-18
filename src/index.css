@@ -120,7 +120,7 @@ kbd { font: 500 10px/1 Inter, sans-serif; padding: 3px 5px; border-radius: 4px; 
 /* ---------- review layout ---------- */
 .review { height: 100%; display: flex; flex-direction: column; min-width: 1024px; }
 .review-bar { gap: 20px; height: 68px; padding: 0 24px; }
-.logo { font-size: 20px; letter-spacing: 0.01em; flex: none; }
+.logo { font-family: Unbounded, Inter, sans-serif; font-size: 17px; font-weight: 700; letter-spacing: -0.02em; white-space: nowrap; flex: none; }
 .shoot { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 4px; }
 .shoot h1 { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .shoot .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -129,7 +129,7 @@ kbd { font: 500 10px/1 Inter, sans-serif; padding: 3px 5px; border-radius: 4px; 
 .warn { color: #ff9e5e; }
 
 .boot { height: 100%; display: grid; place-content: center; justify-items: center; gap: 12px; }
-.boot strong { font-size: 28px; }
+.boot strong.logo { font-size: 28px; }
 
 .resume { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; margin: -8px -8px 28px; border-radius: 10px; background: var(--accent-soft); }
 .resume h3 { font-size: 18px; font-weight: 600; margin: 6px 0 4px; }

@@ -150,7 +150,7 @@ export default function App() {
   if (phase === 'boot') {
     return (
       <div className="boot">
-        <strong>BURST</strong>
+        <strong className="logo">Burst Bud</strong>
         <span className="muted small">{resumeBusy ?? 'Loading…'}</span>
       </div>
     );

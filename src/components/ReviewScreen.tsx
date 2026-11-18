@@ -309,7 +309,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
   return (
     <div className="review">
       <header className="appbar review-bar">
-        <strong className="logo">BURST</strong>
+        <strong className="logo">Burst Bud</strong>
         <div className="shoot">
           <h1 title={shoot.rootName}>{shoot.rootName}</h1>
         </div>
