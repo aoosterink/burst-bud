@@ -4,6 +4,7 @@ import type { MediaItem } from '../lib/types';
 import { canSavePicks, formatBytes, pickDestination, planSave, savePicks, type SaveProgress } from '../lib/savePicks';
 import { buildZip, downloadBlob, splitParts, zipSize } from '../lib/zipPicks';
 import { plural } from '../lib/format';
+import { SOURCE_URL } from '../lib/links';
 
 interface Props {
   shootName: string;
@@ -14,7 +15,7 @@ interface Props {
 }
 
 type Phase =
-  | { kind: 'setup'; error?: string }
+  | { kind: 'setup'; error?: string; folderBlocked?: boolean }
   // Chrome / Edge / Arc: copy straight into a folder
   | { kind: 'saving'; progress: SaveProgress; dest: string }
   | { kind: 'done'; progress: SaveProgress; dest: string; stopped: boolean }
@@ -58,7 +59,8 @@ export function SaveDialog({ shootName, kept, startIn, onClose }: Props) {
       dest = newFolder ? await parent.getDirectoryHandle(name, { create: true }) : parent;
     } catch (e) {
       if ((e as DOMException)?.name === 'AbortError') return; // picker closed
-      return setPhase({ kind: 'setup', error: `Couldn't use that folder: ${(e as Error).message}` });
+      // Usually the browser refusing that spot (e.g. a system folder) or edit access being declined.
+      return setPhase({ kind: 'setup', folderBlocked: true });
     }
     stop.current = false;
     const result = await savePicks(
@@ -139,6 +141,7 @@ export function SaveDialog({ shootName, kept, startIn, onClose }: Props) {
             </>
           )}
           {phase.error && <p className="error">{phase.error}</p>}
+          {phase.folderBlocked && <FolderBlocked folder={cleanName(folderName) || 'your picks folder'} newFolder={newFolder} />}
 
           <div className="confirm-actions">
             <button className="btn subtle" onClick={onClose}>
@@ -236,6 +239,26 @@ function ProgressBar({ value }: { value: number }) {
   return (
     <div className="save-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(value * 100)}>
       <span style={{ transform: `scaleX(${value})` }} />
+    </div>
+  );
+}
+
+
+/** Shown when the browser won't let us write where the user picked. */
+function FolderBlocked({ folder, newFolder }: { folder: string; newFolder: boolean }) {
+  return (
+    <div className="save-blocked" role="alert">
+      <strong>Your browser didn't allow saving there.</strong>
+      <p>
+        To save your picks, Burst Bud needs permission to {newFolder ? <>create one folder, <b>{folder}</b>, and </> : null}copy your kept files into it.
+        It never changes, moves or deletes anything else, and nothing is uploaded: it all happens on your computer.
+      </p>
+      <p>
+        Browsers block some places, like system folders. Pick a folder next to your shoot and choose <b>Edit files</b> when your browser asks.
+      </p>
+      <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+        Check the source code on GitHub ↗
+      </a>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useReview, type Shoot, type VisibleGroup } from '../lib/store';
-import { clockTime, pad2, plural, shortDate } from '../lib/format';
+import { pad2, plural, shortDate } from '../lib/format';
 import { Stage } from './Stage';
 import { GapControl } from './GapControl';
 import { Navigator } from './Navigator';
@@ -50,10 +50,14 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
   const focusIdx = focused ? visibleGroups.findIndex((g) => g.id === focused.id) : -1;
   const keptInFocused = focused ? focused.items.filter((id) => statusOf(id) === 'keep').length : 0;
   const unkeptInFocused = useMemo(() => (focused ? focused.items.filter((id) => statusOf(id) === 'review') : []), [focused, statusOf]);
-  const allUnkeptPhotos = useMemo(
-    () => shoot.items.filter((i) => i.kind === 'photo' && statusOf(i.id) === 'review').map((i) => i.id),
-    [shoot, statusOf],
-  );
+  // Everything not kept and not yet archived: photos and videos.
+  const allUnkept = useMemo(() => shoot.items.filter((i) => statusOf(i.id) === 'review'), [shoot, statusOf]);
+  const allUnkeptPhotos = useMemo(() => allUnkept.map((i) => i.id), [allUnkept]);
+  const unkeptWhat = (() => {
+    const v = allUnkept.filter((i) => i.kind === 'video').length;
+    const ph = allUnkept.length - v;
+    return [ph ? plural(ph, 'photo') : '', v ? plural(v, 'video') : ''].filter(Boolean).join(' and ') || '0 photos';
+  })();
 
   const setFrame = useCallback(
     (i: number) => focused && dispatch({ type: 'cursor', groupId: focused.id, itemId: focused.visible[i].id }),
@@ -100,11 +104,12 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       type: 'setStatus',
       ids: unkeptInFocused,
       to: 'archived',
+      focusItem: current?.id,
       label: `archive ${plural(unkeptInFocused.length, 'photo')} in ${name}`,
       toast: `Archived ${plural(unkeptInFocused.length, 'photo')} from ${name}${keptInFocused ? ` · kept ${keptInFocused}` : ''}`,
     });
     if (nextGroup) focusGroup(nextGroup.id);
-  }, [focused, unkeptInFocused, keptInFocused, burstLabel, visibleGroups, focusIdx, dispatch, focusGroup]);
+  }, [focused, current, unkeptInFocused, keptInFocused, burstLabel, visibleGroups, focusIdx, dispatch, focusGroup]);
 
   const archiveRestOfGroup = useCallback(() => {
     if (!focused || !unkeptInFocused.length || sweeping) return;
@@ -122,10 +127,41 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       type: 'setStatus',
       ids: allUnkeptPhotos,
       to: 'archived',
-      label: `archive ${plural(allUnkeptPhotos.length, 'photo')}`,
-      toast: `Archived ${plural(allUnkeptPhotos.length, 'photo')} across the shoot${counts.keep ? ` · ${plural(counts.keep, 'keeper')} stay` : ''}`,
+      focusItem: current?.id,
+      label: `archive ${unkeptWhat}`,
+      toast: `Archived ${unkeptWhat} across the shoot${counts.keep ? ` · ${plural(counts.keep, 'keeper')} ${counts.keep === 1 ? 'stays' : 'stay'}` : ''}`,
     });
-  }, [allUnkeptPhotos, counts.keep, dispatch]);
+  }, [allUnkeptPhotos, unkeptWhat, counts.keep, current, dispatch]);
+
+  /** Archive the not-kept items of one group (from the Overview). */
+  const archiveGroup = useCallback(
+    (groupId: string, ids: string[]) => {
+      const g = groups.find((x) => x.id === groupId);
+      const name = g ? (g.kind === 'video' ? `Video ${labels.map.get(g.id)}` : `Burst ${labels.map.get(g.id)}`) : 'this burst';
+      const keeper = g?.items.find((id) => statusOf(id) === 'keep');
+      dispatch({
+        type: 'setStatus',
+        ids,
+        to: 'archived',
+        focusItem: keeper ?? ids[0],
+        label: `archive ${plural(ids.length, 'item')} in ${name}`,
+        toast: `Archived ${plural(ids.length, g?.kind === 'video' ? 'video' : 'photo')} from ${name}`,
+      });
+    },
+    [groups, labels, statusOf, dispatch],
+  );
+
+  /** Undo, then bring back the burst and photo that were on screen when it happened. */
+  const undo = useCallback(() => {
+    const last = state.undo[state.undo.length - 1];
+    dispatch({ type: 'undo' });
+    const id = last?.focusItem;
+    const g = id ? groups.find((x) => x.items.includes(id)) : undefined;
+    if (id && g) {
+      dispatch({ type: 'focus', groupId: g.id });
+      dispatch({ type: 'cursor', groupId: g.id, itemId: id });
+    }
+  }, [state.undo, groups, dispatch]);
 
   const restore = useCallback(
     (ids: string[]) =>
@@ -179,7 +215,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       if (shortcutsOpen || e.key === '/') return; // the overlay handles its own keys
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
-        dispatch({ type: 'undo' });
+        undo();
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -239,7 +275,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen, fromOverview]);
+  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen, fromOverview, undo]);
 
   // Toast stays mounted briefly after it's dismissed so it can animate out.
   const [toastShown, setToastShown] = useState(state.toast);
@@ -318,8 +354,8 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
             className="btn"
             onClick={() => setConfirmArchiveAll(true)}
             disabled={!allUnkeptPhotos.length}
-            aria-label={`Archive all ${allUnkeptPhotos.length} photos except kept`}
-            title="Archives every photo that isn't kept. Videos are left alone. Undo with ⌘Z."
+            aria-label={`Archive all ${unkeptWhat} except kept`}
+            title="Archives every photo and video that isn't kept. Undo with ⌘Z."
           >
             Archive all except kept
             {allUnkeptPhotos.length > 0 && <span className="badge">{allUnkeptPhotos.length}</span>}
@@ -360,6 +396,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
           onOpen={openInTimeline}
           onToggleKeep={toggleKeepId}
           onRestore={restore}
+          onArchive={archiveGroup}
           summary={[
             shoot.items[0] ? shortDate(shoot.items[0].time) : '',
             plural(counts.photos, 'photo'),
@@ -400,15 +437,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
       <section className="controls">
         {current && focused ? (
           <>
-            <div className="file">
-              <strong title={current.id}>{current.name}</strong>
-              <span className="muted small">
-                {focused.kind === 'photo' ? `Frame ${frameIndex + 1} / ${focused.visible.length} · ` : ''}
-                {clockTime(current.time, true)}
-                {current.raw && ' · +RAW'}
-                {!current.exifTime && ' · file date'}
-              </span>
-            </div>
+            <div />
             <div className="actions">
               <button className={`primary${isKept ? ' is-kept' : ''}`} onClick={toggleKeep} aria-pressed={isKept}>
                 {isKept ? '✓ Kept' : `+ Keep ${current.kind}`} <kbd>Space</kbd>
@@ -416,9 +445,6 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
               <button className="btn" onClick={archiveRestOfGroup} disabled={!unkeptInFocused.length}>
                 {focused.kind === 'video' ? 'Archive video' : unkeptInFocused.length ? `Archive ${unkeptInFocused.length} not kept` : 'Nothing to archive'} <kbd>A</kbd>
               </button>
-              <span className="muted small">
-                {focused.kind === 'video' ? 'Archiving hides it from the timeline.' : keptInFocused ? `Keeps your ${plural(keptInFocused, 'pick')}` : 'Nothing kept in this burst yet'}
-              </span>
             </div>
             <div className="restore-slot">
               {archivedInFocused.length > 0 && (
@@ -448,8 +474,6 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         statusOf={statusOf}
         onSeek={seekShoot}
         onStep={moveGroup}
-        bursts={labels.bursts}
-        videos={labels.videos}
       />
       </>
       )}
@@ -462,13 +486,13 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
 
       {confirmArchiveAll && (
         <ConfirmDialog
-          title={`Archive ${plural(allUnkeptPhotos.length, 'photo')}?`}
+          title={`Archive ${unkeptWhat}?`}
           body={
             counts.keep
-              ? `Every photo you haven't kept, across all ${plural(labels.bursts, 'burst')}, moves to the archive. Your ${plural(counts.keep, 'keeper')} and all videos stay. You can undo this right after with ⌘Z.`
-              : `You haven't kept any photos yet, so every photo in all ${plural(labels.bursts, 'burst')} moves to the archive. Videos stay. You can undo this right after with ⌘Z.`
+              ? `Every photo and video you haven't kept moves to the archive. Your ${plural(counts.keep, 'keeper')} ${counts.keep === 1 ? 'stays' : 'stay'}. You can undo this right after with ⌘Z.`
+              : `You haven't kept anything yet, so every photo and video in the shoot moves to the archive. You can undo this right after with ⌘Z.`
           }
-          confirmLabel={`Archive ${plural(allUnkeptPhotos.length, 'photo')}`}
+          confirmLabel={`Archive ${unkeptWhat}`}
           cancelLabel="Cancel"
           onConfirm={() => {
             setConfirmArchiveAll(false);
@@ -482,7 +506,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         <div className={`toast${toastShown.undoable ? '' : ' quiet'}${toastLeaving ? ' leaving' : ''}`} key={toastShown.id} role="status">
           <span>{toastShown.text}</span>
           {toastShown.undoable && !toastLeaving && (
-            <button className="toast-undo" onClick={() => dispatch({ type: 'undo' })}>
+            <button className="toast-undo" onClick={undo}>
               <svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M5.5 3 2.5 6l3 3" />
                 <path d="M2.5 6H10a3.5 3.5 0 0 1 0 7H6" />

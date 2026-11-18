@@ -15,6 +15,7 @@ import { plural, shortDate } from '../lib/format';
 import type { SavedSession } from '../lib/session';
 import { GapControl, GapIcon } from './GapControl';
 import './ImportScreen.css';
+import { SOURCE_URL } from '../lib/links';
 
 export interface ImportOrigin {
   scan: ScanResult;
@@ -196,6 +197,7 @@ export function ImportScreen({ onOpen, resume }: Props) {
       <main className="import-main">
         <BurstShowcase />
 
+        <div className="import-side">
         <section className="import-card">
           {resume && !loaded && (
             <div className="resume">
@@ -279,12 +281,30 @@ export function ImportScreen({ onOpen, resume }: Props) {
             }}
           />
         </section>
-      </main>
 
-      <footer className="import-foot">
-        <span className="muted small">Your originals stay put. Keep and archive only change review labels.</span>
-        <span className="muted small">Runs entirely in your browser · nothing is uploaded</span>
-      </footer>
+        <ul className="import-trust">
+          <li>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 1.8 2.8 3.9v3.7c0 3.2 2.2 5.6 5.2 6.6 3-1 5.2-3.4 5.2-6.6V3.9z" />
+              <path d="m5.8 8 1.6 1.6 2.9-3.1" />
+            </svg>
+            Your originals stay put. Keep and archive only change review labels.
+          </li>
+          <li>
+            <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="2" y="3" width="12" height="8" rx="1.2" />
+              <path d="M5.5 13.5h5M8 11v2.5" />
+            </svg>
+            <span>
+              Runs entirely in your browser · nothing is uploaded ·{' '}
+              <a href={SOURCE_URL} target="_blank" rel="noreferrer">
+                source code ↗
+              </a>
+            </span>
+          </li>
+        </ul>
+        </div>
+      </main>
     </div>
   );
 }

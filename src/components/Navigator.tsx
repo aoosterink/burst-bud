@@ -1,4 +1,5 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { memo, useEffect, useRef, type ReactNode } from 'react';
+import { useThumb } from '../lib/hooks';
 import type { VisibleGroup } from '../lib/store';
 import type { Status } from '../lib/types';
 import { clockTime, plural } from '../lib/format';
@@ -13,8 +14,6 @@ interface Props {
   /** Focus a group; with a fraction, also jump to that position inside it. */
   onSeek: (groupId: string, fraction: number | null) => void;
   onStep: (steps: number) => void;
-  bursts: number;
-  videos: number;
   /** Right side of the header line (totals, save state). */
   aside?: ReactNode;
 }
@@ -24,7 +23,7 @@ interface Props {
  * across the bar to seek through the shoot frame by frame, like a video timeline.
  * Scroll (wheel or trackpad) over it to step between bursts.
  */
-export function Navigator({ groups, focusedId, frameFraction, labels, statusOf, onSeek, onStep, bursts, videos, aside }: Props) {
+export function Navigator({ groups, focusedId, frameFraction, labels, statusOf, onSeek, onStep, aside }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x0: number; moved: boolean } | null>(null);
   const wheelAcc = useRef(0);
@@ -87,13 +86,8 @@ export function Navigator({ groups, focusedId, frameFraction, labels, statusOf, 
   return (
     <nav className="navigator" aria-label="Shoot overview">
       <div className="nav-head">
-        <span>
-          Shoot overview{' '}
-          <span className="muted small">
-            · {plural(bursts, 'burst')} · {plural(videos, 'video')}
-          </span>
-        </span>
-        <span className="nav-aside small">{aside}</span>
+        <span>Shoot overview</span>
+        {aside && <span className="nav-aside small">{aside}</span>}
       </div>
       <div
         className={`bars${dense ? ' dense' : ''}`}
@@ -146,10 +140,10 @@ export function Navigator({ groups, focusedId, frameFraction, labels, statusOf, 
               aria-label={`${labels.get(g.id)}, ${plural(g.visible.length, 'item')}`}
               aria-current={on || undefined}
             >
-              <span className="bar-fill">
+              <BarFill group={g} statusOf={statusOf}>
                 {kept && <i />}
                 {on && frameFraction !== null && <b className="playhead" style={{ left: `${frameFraction * 100}%` }} />}
-              </span>
+              </BarFill>
               <span className={`bar-label${on || i === 0 || (i + 1) % labelEvery === 0 ? '' : ' hidden'}`}>{labels.get(g.id)}</span>
             </div>
           );
@@ -158,3 +152,16 @@ export function Navigator({ groups, focusedId, frameFraction, labels, statusOf, 
     </nav>
   );
 }
+
+/** A bar in the filmstrip: the burst's keeper (or middle frame) as a small cover image. */
+const BarFill = memo(function BarFill({ group, statusOf, children }: { group: VisibleGroup; statusOf: (id: string) => Status; children?: ReactNode }) {
+  const items = group.visible;
+  const cover = group.kind === 'photo' ? items.find((i) => statusOf(i.id) === 'keep') ?? items[Math.floor(items.length / 2)] : undefined;
+  const url = useThumb(cover);
+  return (
+    <span className="bar-fill" style={url ? { backgroundImage: `url(${url})` } : undefined}>
+      {group.kind === 'video' && <span className="bar-play" aria-hidden>▶</span>}
+      {children}
+    </span>
+  );
+});

@@ -165,21 +165,27 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
             })}
 
           <div className="crest-head" style={{ left: cx - photoW / 2, width: photoW, top: photoTop - HEAD_H + 6 }}>
-            <div className="crest-title">
-              <span className="eyebrow">{burstLabel(focused)}</span>
-              {current.folder && (
-                <span className="folder-path" title={current.folder}>
-                  <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
-                    <path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.5 1.6h5.9a1 1 0 0 1 1 1v6.4a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />
-                  </svg>
-                  {current.folder.split('/').join(' / ')}
-                </span>
-              )}
+            <div className="crest-meta">
+              <div className="crest-title">
+                <span className="eyebrow">{burstLabel(focused)}</span>
+                {current.folder && (
+                  <span className="folder-path" title={current.folder}>
+                    <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round">
+                      <path d="M1.5 4.5a1 1 0 0 1 1-1h3.6l1.5 1.6h5.9a1 1 0 0 1 1 1v6.4a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1z" />
+                    </svg>
+                    {current.folder.split('/').join(' / ')}
+                  </span>
+                )}
+              </div>
+              <h2>
+                {clockTime(focused.start)}
+                {focused.kind === 'photo' && n > 1 && <span className="muted"> · {seconds(focused.end - focused.start)}</span>}
+              </h2>
             </div>
-            <h2>
-              {clockTime(focused.start)}
-              {focused.kind === 'photo' && n > 1 && <span className="muted"> · {seconds(focused.end - focused.start)}</span>}
-            </h2>
+            <span className="crest-file" title={current.id}>
+              {current.name}
+              {current.raw && <i>RAW</i>}
+            </span>
           </div>
 
           <div

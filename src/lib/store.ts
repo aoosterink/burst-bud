@@ -12,6 +12,8 @@ export interface Shoot {
 interface UndoEntry {
   label: string;
   changes: Array<[string, Status]>; // id -> previous status
+  /** The photo on screen when the action happened; undo brings you back to it. */
+  focusItem?: string;
 }
 
 interface State {
@@ -27,7 +29,7 @@ interface State {
 
 type Action =
   | { type: 'load'; saved: Saved }
-  | { type: 'setStatus'; ids: string[]; to: Status; label: string; toast?: string }
+  | { type: 'setStatus'; ids: string[]; to: Status; label: string; toast?: string; focusItem?: string }
   | { type: 'undo' }
   | { type: 'gap'; gapMs: number }
   | { type: 'filter'; filter: Filter }
@@ -65,7 +67,7 @@ function reducer(state: State, a: Action): State {
       return {
         ...state,
         status,
-        undo: [...state.undo.slice(-49), { label: a.label, changes }],
+        undo: [...state.undo.slice(-49), { label: a.label, changes, focusItem: a.focusItem }],
         toast: a.toast ? { id: ++toastSeq, text: a.toast, undoable: true } : state.toast,
       };
     }

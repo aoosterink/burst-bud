@@ -16,12 +16,14 @@ interface Props {
   onOpen: (groupId: string, itemId: string) => void;
   onToggleKeep: (itemId: string) => void;
   onRestore: (ids: string[]) => void;
+  /** Archive everything not kept in one group. */
+  onArchive: (groupId: string, ids: string[]) => void;
   /** Shoot summary line shown at the top. */
   summary: string;
 }
 
 /** The whole shoot at a glance: every burst as a row of frames. */
-export function Overview({ groups, labels, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore, summary }: Props) {
+export function Overview({ groups, labels, focusedId, currentItemId, statusOf, keptOnly, onOpen, onToggleKeep, onRestore, onArchive, summary }: Props) {
   const scroller = useRef<HTMLDivElement>(null);
 
   // Start where you were in the timeline.
@@ -49,6 +51,7 @@ export function Overview({ groups, labels, focusedId, currentItemId, statusOf, k
       {groups.map((g) => {
         const kept = g.items.filter((id) => statusOf(id) === 'keep').length;
         const archived = g.items.filter((id) => statusOf(id) === 'archived');
+        const unkept = g.items.filter((id) => statusOf(id) === 'review');
         const label = labels.get(g.id) ?? '';
         const folder = g.visible[0]?.folder;
         return (
@@ -58,6 +61,20 @@ export function Overview({ groups, labels, focusedId, currentItemId, statusOf, k
               <strong>{clockTime(g.start)}</strong>
               {g.kind === 'photo' && g.items.length > 1 && <span className="muted">{seconds(g.end - g.start)}</span>}
               {folder && <span className="muted ov-folder">{folder.split('/').join(' / ')}</span>}
+              {unkept.length > 0 && !keptOnly && (
+                <button
+                  className="ov-archive"
+                  onClick={() => onArchive(g.id, unkept)}
+                  title={g.kind === 'video' ? 'Archive this video' : `Archive the ${plural(unkept.length, 'photo')} you haven't kept`}
+                >
+                  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="3" width="12" height="3" rx="0.8" />
+                    <path d="M3 6v6.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V6" />
+                    <path d="M6.5 9h3" />
+                  </svg>
+                  {g.kind === 'video' ? 'Archive video' : `Archive ${unkept.length} not kept`}
+                </button>
+              )}
               {archived.length > 0 && !keptOnly && (
                 <button
                   className="ov-restore"

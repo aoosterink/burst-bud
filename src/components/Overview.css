@@ -92,3 +92,13 @@
 }
 .ov-restore:hover { background: rgb(247 201 72 / 0.2); }
 .ov-restore:active { transform: scale(0.95); }
+
+/* Archive the rest of a burst from the Overview */
+.ov-archive {
+  align-self: center; display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px 0 8px;
+  border-radius: 12px; font-size: 11.5px; font-weight: 600; color: var(--text);
+  background: var(--btn); box-shadow: inset 0 0 0 1px #2c3a4c;
+  transition: background 140ms var(--ease-out), transform 120ms var(--ease-out);
+}
+.ov-archive:hover { background: var(--btn-hover); }
+.ov-archive:active { transform: scale(0.95); }
