@@ -103,20 +103,34 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
     onHoldChange(false);
   }
 
-  function onWheel(e: React.WheelEvent) {
-    if (n < 2) return;
-    wheelAcc.current += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
-    const stepPx = 28;
-    const steps = Math.trunc(wheelAcc.current / stepPx);
-    if (steps) {
-      wheelAcc.current -= steps * stepPx;
-      onFrame(Math.max(0, Math.min(n - 1, frameIndex + steps)));
-    }
-  }
+  // Trackpad / wheel scrubs frames. A non-passive listener so we can claim the gesture:
+  // otherwise a two-finger horizontal swipe can also trigger the browser's "back".
+  const wheelState = useRef({ n, frameIndex, onFrame });
+  useEffect(() => {
+    wheelState.current = { n, frameIndex, onFrame };
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const { n, frameIndex, onFrame } = wheelState.current;
+      if (n < 2) return;
+      wheelAcc.current += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const stepPx = 28;
+      const steps = Math.trunc(wheelAcc.current / stepPx);
+      if (steps) {
+        wheelAcc.current -= steps * stepPx;
+        onFrame(Math.max(0, Math.min(n - 1, frameIndex + steps)));
+      }
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
 
 
   return (
-    <div className={`stage${holding ? ' holding' : ''}${sweeping ? ' sweeping' : ''}`} ref={ref} onWheel={onWheel}>
+    <div className={`stage${holding ? ' holding' : ''}${sweeping ? ' sweeping' : ''}`} ref={ref}>
       {W > 0 && (
         <>
           <div className="spine" style={{ top: midY }} />

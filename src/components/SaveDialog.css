@@ -19,3 +19,9 @@
 /* Header button */
 .btn.save { background: var(--accent-soft); color: var(--accent); }
 .btn.save:not(:disabled):hover { background: #22405f; }
+
+/* ZIP mode (Safari / Firefox) */
+.save-label { display: block; margin-top: 16px; font-size: 13px; }
+.save-name.zip { margin-left: 0; max-width: 100%; }
+.zip-parts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.zip-parts .primary, .zip-parts .btn { height: 38px; }

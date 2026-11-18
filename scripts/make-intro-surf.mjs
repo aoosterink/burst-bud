@@ -11,8 +11,10 @@ const W = 2000;
 const resized = await sharp(SRC).rotate().resize({ width: W }).toBuffer();
 const { height: H } = await sharp(resized).metadata();
 
-// Frame around the second surfer from the left (for a 2000×1012 image).
-const box = { x: 346, y: 404, w: 248, h: 308 };
+// Frame around the keeper (second surfer from the left), in pixels of the 2000px-wide output.
+// For another photo, pass BOX="x,y,w,h".
+const [bx, by, bw, bh] = (process.env.BOX ?? '384,500,272,368').split(',').map(Number);
+const box = { x: bx, y: by, w: bw, h: bh };
 const ACCENT = '#f7c948';
 const INK = '#1f1702';
 const s = 1.4; // the image shows at ~1440px wide, so scale strokes up a bit

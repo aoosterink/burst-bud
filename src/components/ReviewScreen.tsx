@@ -7,6 +7,8 @@ import { Navigator } from './Navigator';
 import { Overview } from './Overview';
 import { ConfirmDialog } from './ConfirmDialog';
 import { SaveDialog } from './SaveDialog';
+import { ShortcutsOverlay } from './ShortcutsOverlay';
+import { useShortcutsKey } from '../lib/useShortcutsKey';
 import { canSavePicks } from '../lib/savePicks';
 
 type View = 'timeline' | 'overview';
@@ -134,6 +136,8 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
   // "Archive all except kept" touches the whole shoot, so it asks first.
   const [confirmArchiveAll, setConfirmArchiveAll] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  useShortcutsKey(shortcutsOpen, setShortcutsOpen);
   const keptItems = useMemo(() => shoot.items.filter((i) => statusOf(i.id) === 'keep'), [shoot, statusOf]);
   const saveSupported = canSavePicks();
 
@@ -168,6 +172,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement;
       if (t?.closest('input, textarea, video, dialog')) return;
+      if (shortcutsOpen || e.key === '/') return; // the overlay handles its own keys
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
         e.preventDefault();
         dispatch({ type: 'undo' });
@@ -226,7 +231,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView]);
+  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen]);
 
   // Toast stays mounted briefly after it's dismissed so it can animate out.
   const [toastShown, setToastShown] = useState(state.toast);
@@ -319,14 +324,8 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
           <button
             className="btn save"
             onClick={() => setSaving(true)}
-            disabled={!keptItems.length || !saveSupported}
-            title={
-              !saveSupported
-                ? 'Saving copies needs Chrome, Edge or Arc'
-                : keptItems.length
-                  ? 'Copy your kept photos into a folder'
-                  : 'Keep some photos first'
-            }
+            disabled={!keptItems.length}
+            title={!keptItems.length ? 'Keep some photos first' : saveSupported ? 'Copy your kept photos into a folder' : 'Download your kept photos as a ZIP'}
           >
             <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8 2v8" />
@@ -419,6 +418,9 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
                   Restore {archivedInFocused.length} archived
                 </button>
               )}
+              <button className="btn subtle shortcuts" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (tap / to open, hold / to peek)">
+                Shortcuts <kbd>/</kbd>
+              </button>
             </div>
           </>
         ) : (
@@ -438,6 +440,14 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         videos={labels.videos}
       />
       </>
+      )}
+
+      {shortcutsOpen && (
+        <ShortcutsOverlay
+          frames={(focused?.kind === 'photo' ? focused.visible : visibleGroups.find((g) => g.kind === 'photo')?.visible ?? []).slice(0, 12)}
+          nextFrames={(visibleGroups.slice(focusIdx + 1).find((g) => g.kind === 'photo')?.visible ?? []).slice(0, 12)}
+          onClose={() => setShortcutsOpen(false)}
+        />
       )}
 
       {saving && <SaveDialog shootName={shoot.rootName} kept={keptItems} startIn={folderHandle} onClose={() => setSaving(false)} />}
