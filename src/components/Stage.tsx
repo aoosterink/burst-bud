@@ -1,5 +1,5 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { loadPreview, loadThumb, peekPreview, prefetchAround, setPreviewWidth } from '../lib/images';
+import { memo, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { aspectOf, loadFull, loadPreview, loadThumb, naturalSizeOf, peekFull, peekPreview, prefetchAround, setPreviewWidth } from '../lib/images';
 import { useElementSize, useObjectUrl, useThumb } from '../lib/hooks';
 import type { VisibleGroup } from '../lib/store';
 import type { MediaItem, Status } from '../lib/types';
@@ -18,11 +18,19 @@ interface Props {
   sweeping?: boolean;
   /** Changes when the visible set changes (e.g. Kept only), to cross-fade the burst. */
   viewKey?: string;
+  /** Keep / Archive buttons, shown inside the photo. */
+  actions?: ReactNode;
+  /** Z and Esc are handled here (zoom); false while a dialog or overlay has the keyboard. */
+  keysEnabled?: boolean;
+  onZoomChange?: (zoomed: boolean) => void;
 }
 
 const SLIVERS = 9;
 
-export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFrame, onFocus, onHoldChange, sweeping = false, viewKey = '' }: Props) {
+/** Zoom relative to "fit" (z = 1), centred on x / y (0–1 across the photo). */
+export type Zoom = { z: number; x: number; y: number };
+
+export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFrame, onFocus, onHoldChange, sweeping = false, viewKey = '', actions, keysEnabled = true, onZoomChange }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const { width: W, height: H } = useElementSize(ref);
   const [holding, setHolding] = useState(false);
@@ -38,7 +46,12 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
   // Direction of travel between bursts, so the new one slides in from where it lives.
   // (Derived-state pattern: React re-renders before commit when we set state here.)
   const [nav, setNav] = useState({ id: focused.id, gi, dir: 0 });
-  if (nav.id !== focused.id) setNav({ id: focused.id, gi, dir: gi > nav.gi ? 1 : -1 });
+  // A new burst starts at fit: zoom stays only while you step through the same burst.
+  const [zoom, setZoom] = useState<Zoom | null>(null);
+  if (nav.id !== focused.id) {
+    setNav({ id: focused.id, gi, dir: gi > nav.gi ? 1 : -1 });
+    if (zoom) setZoom(null);
+  }
   const enterClass = nav.dir > 0 ? 'from-right' : nav.dir < 0 ? 'from-left' : 'fade-in';
 
   // Brief ring when the current photo becomes kept (not when you scrub onto a kept one).
@@ -48,16 +61,101 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
   else if (keep.kept !== keptNow) setKeep({ ...keep, kept: keptNow, flash: keep.flash + (keptNow ? 1 : 0), flashId: keptNow ? current.id : '' });
 
   // Geometry --------------------------------------------------------------
+  // The frame takes the photo's own shape (portrait photos get a tall frame). Until a
+  // photo's shape is known, keep the last one so the frame doesn't jump while scrubbing.
+  const [lastAspect, setLastAspect] = useState(() => aspectOf(current.id) ?? 1.5);
+  const aspect = Math.max(0.4, Math.min(3, aspectOf(current.id) ?? lastAspect));
   const STRIP_H = n > 1 ? 56 : 0;
-  const HEAD_H = 56;
-  const photoH = Math.max(160, Math.min(H - STRIP_H - HEAD_H - 28, (W * 0.46) / 1.5));
-  const photoW = photoH * 1.5;
+  const HEAD_H = 52;
+  // Enough room either side for the frame slivers and the neighbouring bursts.
+  const minSide = Math.max(130, Math.min(300, W * 0.12));
+  const photoH = Math.max(160, Math.min(H - STRIP_H - HEAD_H - 20, (W - 2 * minSide) / aspect));
+  const photoW = photoH * aspect;
   const cx = W / 2;
   const photoTop = HEAD_H + Math.max(0, (H - STRIP_H - HEAD_H - photoH) / 2);
   const midY = photoTop + photoH / 2;
   const side = Math.max(0, (W - photoW) / 2);
-  const neighbourW = side * 0.5;
+  const neighbourW = Math.min(side * 0.55, 280);
   const step = Math.max(6, Math.min(34, (side - neighbourW) / (SLIVERS + 1)));
+  // A narrow (portrait) frame still gets a readable header.
+  const headW = Math.min(W - 24, Math.max(photoW, 460));
+
+  // Zoom ------------------------------------------------------------------
+  const zoomable = focused.kind === 'photo';
+  const natural = naturalSizeOf(current.id);
+  const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
+  /** Zoom at which one photo pixel is one screen pixel (pixel-peeping). */
+  const oneToOne = natural ? Math.max(1.5, natural.w / (photoW * dpr)) : null;
+  const maxZoom = Math.max(4, (oneToOne ?? 2) * 2);
+  const [zoomBusy, setZoomBusy] = useState(false);
+
+  /** Keep the photo covering the frame: no panning past its edges. */
+  const clampView = (v: Zoom): Zoom | null => {
+    if (v.z <= 1.001) return null;
+    const z = Math.min(maxZoom, v.z);
+    const hx = 1 / (2 * z);
+    return { z, x: Math.max(hx, Math.min(1 - hx, v.x)), y: Math.max(hx, Math.min(1 - hx, v.y)) };
+  };
+  /** Zoom to z, keeping the photo point under (px, py) (CSS px inside the frame) where it is. */
+  const zoomAround = (from: Zoom | null, z: number, px: number, py: number): Zoom | null => {
+    const f = from ?? { z: 1, x: 0.5, y: 0.5 };
+    const nx = f.x + (px - photoW / 2) / (photoW * f.z);
+    const ny = f.y + (py - photoH / 2) / (photoH * f.z);
+    return clampView({ z, x: nx - (px - photoW / 2) / (photoW * z), y: ny - (py - photoH / 2) / (photoH * z) });
+  };
+
+  const zoomRef = useRef({ zoom, zoomAround, clampView, photoW, photoH, zoomable, current });
+  useEffect(() => {
+    zoomRef.current = { zoom, zoomAround, clampView, photoW, photoH, zoomable, current };
+  });
+
+  /** Z / double-click: fit ↔ 1:1 around a point (the frame's centre when none is given). */
+  const toggleZoom = (px = photoW / 2, py = photoH / 2) => {
+    if (!zoomable) return;
+    if (zoom) return setZoom(null);
+    const item = current;
+    const go = () => {
+      const r = zoomRef.current;
+      if (r.current.id !== item.id) return;
+      const nat = naturalSizeOf(item.id);
+      const z = nat ? Math.max(1.5, nat.w / (r.photoW * dpr)) : 2;
+      setZoom(r.zoomAround(null, z, px, py));
+    };
+    if (natural) return go();
+    // The 1:1 level depends on the full-size decode; it takes a moment the first time.
+    setZoomBusy(true);
+    loadFull(item).then(() => {
+      setZoomBusy(false);
+      go();
+    });
+  };
+
+  useEffect(() => onZoomChange?.(!!zoom), [zoom, onZoomChange]);
+
+  // Z toggles zoom, Esc leaves it.
+  const toggleRef = useRef(toggleZoom);
+  useEffect(() => {
+    toggleRef.current = toggleZoom;
+  });
+  useEffect(() => {
+    if (!keysEnabled) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (t?.closest('input, textarea, video, dialog')) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'z' || e.key === 'Z') toggleRef.current();
+      else if (e.key === 'Escape' && zoomRef.current.zoom) setZoom(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [keysEnabled]);
+
+  // While zoomed, decode the neighbouring frames at full size too, so stepping stays sharp.
+  useEffect(() => {
+    if (!zoom || !zoomable) return;
+    for (const it of [frames[frameIndex + 1], frames[frameIndex - 1]]) if (it) loadFull(it);
+    loadFull(current);
+  }, [zoom, zoomable, frames, frameIndex, current]);
 
   useEffect(() => {
     if (photoW) setPreviewWidth(photoW * (window.devicePixelRatio || 1));
@@ -76,6 +174,36 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
 
   // Hold + slide to seek ---------------------------------------------------
   const drag = useRef<{ x0: number; c0: number; left: number; right: number } | null>(null);
+  const pan = useRef<{ x0: number; y0: number; v: Zoom } | null>(null);
+  const [panning, setPanning] = useState(false);
+
+  function pointerDown(e: React.PointerEvent) {
+    if (e.button !== 0 || !zoomable) return;
+    if (zoom) {
+      pan.current = { x0: e.clientX, y0: e.clientY, v: zoom };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      setPanning(true);
+      return;
+    }
+    seekStart(e);
+  }
+  function pointerMove(e: React.PointerEvent) {
+    const p = pan.current;
+    if (p) {
+      const v = clampView({ z: p.v.z, x: p.v.x - (e.clientX - p.x0) / (photoW * p.v.z), y: p.v.y - (e.clientY - p.y0) / (photoH * p.v.z) });
+      setZoom(v);
+      return;
+    }
+    seekMove(e);
+  }
+  function pointerUp() {
+    if (pan.current) {
+      pan.current = null;
+      setPanning(false);
+      return;
+    }
+    seekEnd();
+  }
 
   function seekStart(e: React.PointerEvent) {
     if (n < 2 || e.button !== 0) return;
@@ -114,6 +242,23 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      const zr = zoomRef.current;
+      const crest = el.querySelector('.crest');
+      const overPhoto = crest && (e.target as Node) instanceof Node && crest.contains(e.target as Node);
+      // Pinch (or ⌘ / Ctrl + scroll) over the photo zooms around the pointer.
+      if ((e.ctrlKey || e.metaKey) && zr.zoomable && overPhoto) {
+        const r = crest.getBoundingClientRect();
+        const from = zr.zoom;
+        const z = (from?.z ?? 1) * Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.002));
+        setZoom(zr.zoomAround(from, z, e.clientX - r.left, e.clientY - r.top));
+        return;
+      }
+      // Zoomed in: scrolling pans the photo.
+      if (zr.zoom) {
+        const v = zr.zoom;
+        setZoom(zr.clampView({ z: v.z, x: v.x + e.deltaX / (zr.photoW * v.z), y: v.y + e.deltaY / (zr.photoH * v.z) }));
+        return;
+      }
       const { n, frameIndex, onFrame } = wheelState.current;
       if (n < 2) return;
       wheelAcc.current += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
@@ -130,7 +275,7 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
 
 
   return (
-    <div className={`stage${holding ? ' holding' : ''}${sweeping ? ' sweeping' : ''}`} ref={ref}>
+    <div className={`stage${holding ? ' holding' : ''}${sweeping ? ' sweeping' : ''}${zoom ? ' zoomed' : ''}${panning ? ' panning' : ''}`} ref={ref}>
       {W > 0 && (
         <>
           <div className="spine" style={{ top: midY }} />
@@ -164,7 +309,7 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
               return out;
             })}
 
-          <div className="crest-head" style={{ left: cx - photoW / 2, width: photoW, top: photoTop - HEAD_H + 6 }}>
+          <div className="crest-head" style={{ left: cx - headW / 2, width: headW, top: photoTop - HEAD_H + 2 }}>
             <div className="crest-meta">
               <div className="crest-title">
                 <span className="eyebrow">{burstLabel(focused)}</span>
@@ -182,26 +327,28 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
                 {focused.kind === 'photo' && n > 1 && <span className="muted"> · {seconds(focused.end - focused.start)}</span>}
               </h2>
             </div>
-            <span className="crest-file" title={current.id}>
-              {current.name}
-              {current.raw && <i>RAW</i>}
-            </span>
+            <CopyName name={current.name} path={current.id} raw={!!current.raw} />
           </div>
 
           <div
             className={`crest${statusOf(current.id) === 'keep' ? ' kept' : ''}${statusOf(current.id) === 'archived' ? ' archived' : ''}`}
             style={{ left: cx - photoW / 2, top: photoTop, width: photoW, height: photoH }}
-            onPointerDown={focused.kind === 'photo' ? seekStart : undefined}
-            onPointerMove={seekMove}
-            onPointerUp={seekEnd}
-            onPointerCancel={seekEnd}
+            onPointerDown={pointerDown}
+            onPointerMove={pointerMove}
+            onPointerUp={pointerUp}
+            onPointerCancel={pointerUp}
+            onDoubleClick={(e) => {
+              if (!zoomable || (e.target as HTMLElement).closest('.crest-actions')) return;
+              const r = e.currentTarget.getBoundingClientRect();
+              toggleZoom(e.clientX - r.left, e.clientY - r.top);
+            }}
           >
             {focused.kind === 'video' ? (
               <VideoView item={current} />
             ) : (
               <>
                 <ThumbBackdrop item={current} />
-                <PreviewCanvas item={current} width={photoW} height={photoH} />
+                <PreviewCanvas item={current} width={photoW} height={photoH} view={zoom} onAspect={setLastAspect} />
               </>
             )}
             {keptNow && keep.flashId === current.id && <span className="keep-flash" key={keep.flash} aria-hidden />}
@@ -210,10 +357,28 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
                 {holding ? 'Seeking…' : statusLabel(statusOf(current.id))}
               </span>
             )}
-            {n > 1 && (
-              <span className="pill pill-right">
-                {frameIndex + 1} / {n}
-              </span>
+            <span className="pills-right">
+              {(zoom || zoomBusy) && (
+                <button
+                  className="pill pill-zoom"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={() => setZoom(null)}
+                  title="Back to the whole photo (Z or Esc)"
+                >
+                  {zoomBusy ? 'Zooming…' : natural ? `${Math.round((zoom!.z / (natural.w / (photoW * dpr))) * 100)}%` : `${zoom!.z.toFixed(1)}×`}
+                  <span className="pill-x" aria-hidden>Fit</span>
+                </button>
+              )}
+              {n > 1 && (
+                <span className="pill">
+                  {frameIndex + 1} / {n}
+                </span>
+              )}
+            </span>
+            {actions && !holding && (
+              <div className={`crest-actions${focused.kind === 'video' ? ' over-video' : ''}`} onPointerDown={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
+                {actions}
+              </div>
             )}
             {holding && (
               <div className="seekbar">
@@ -234,6 +399,31 @@ export function Stage({ groups, focused, frameIndex, burstLabel, statusOf, onFra
   );
 }
 
+/** The file name: one click copies it (e.g. to find the photo in Lightroom or Finder). */
+function CopyName({ name, path, raw }: { name: string; path: string; raw: boolean }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const timer = useRef<number | null>(null);
+  useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(name);
+    } catch {
+      return;
+    }
+    setCopied(name);
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setCopied(null), 1400);
+  };
+  const done = copied === name;
+  return (
+    <button className={`crest-file${done ? ' copied' : ''}`} onClick={copy} title={`${path} · click to copy the file name`} aria-label={`Copy file name ${name}`}>
+      <span className="crest-file-name">{done ? 'Copied' : name}</span>
+      {raw && !done && <i>RAW</i>}
+      <span className="sr-only" role="status">{done ? 'File name copied' : ''}</span>
+    </button>
+  );
+}
+
 const statusLabel = (s: Status) => (s === 'keep' ? '✓ Kept' : s === 'archived' ? 'Archived' : '');
 
 // ---------------------------------------------------------------------------
@@ -251,50 +441,66 @@ const Sliver = memo(function Sliver({ item, status, style, onClick }: { item: Me
   );
 });
 
-function PreviewCanvas({ item, width, height }: { item: MediaItem; width: number; height: number }) {
+function PreviewCanvas({ item, width, height, view, onAspect }: { item: MediaItem; width: number; height: number; view: Zoom | null; onAspect: (a: number) => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const [missing, setMissing] = useState(false);
-  const shown = useRef<string | null>(null);
+  /** What's painted now: a full-size bitmap is never replaced by a smaller preview. */
+  const painted = useRef<{ id: string; full: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const c = canvas.current!;
     const dpr = window.devicePixelRatio || 1;
     c.width = Math.round(width * dpr);
     c.height = Math.round(height * dpr);
-    shown.current = null;
+    painted.current = null;
   }, [width, height]);
 
   useLayoutEffect(() => {
     let alive = true;
-    const draw = (bmp: ImageBitmap) => {
+    const paint = (bmp: ImageBitmap, full: boolean) => {
       const c = canvas.current;
       if (!c) return;
+      const p = painted.current;
+      if (!full && p?.id === item.id && p.full && view) return;
       const ctx = c.getContext('2d')!;
-      const s = Math.min(c.width / bmp.width, c.height / bmp.height);
-      const w = bmp.width * s;
-      const h = bmp.height * s;
+      const a = bmp.width / bmp.height;
+      // Fit inside the frame, then zoom around the view centre.
+      const fw = Math.min(c.width, c.height * a);
+      const fh = fw / a;
+      const z = view?.z ?? 1;
+      const zw = fw * z;
+      const zh = fh * z;
       try {
+        ctx.imageSmoothingQuality = 'high';
         ctx.clearRect(0, 0, c.width, c.height);
-        ctx.drawImage(bmp, (c.width - w) / 2, (c.height - h) / 2, w, h);
-        shown.current = item.id;
+        ctx.drawImage(bmp, c.width / 2 - (view?.x ?? 0.5) * zw, c.height / 2 - (view?.y ?? 0.5) * zh, zw, zh);
+        painted.current = { id: item.id, full };
         setMissing(false);
+        onAspect(a);
       } catch {
         /* bitmap was evicted mid-draw; the next frame will redraw */
       }
     };
-    const hit = peekPreview(item.id);
-    if (hit) draw(hit);
+    const full = view ? peekFull(item.id) : undefined;
+    const prev = peekPreview(item.id);
+    if (full) paint(full, true);
+    else if (prev) paint(prev, false);
     else
       // Keep the previous frame on screen until this one decodes: no flashing while scrubbing.
       loadPreview(item).then((bmp) => {
         if (!alive) return;
-        if (bmp) draw(bmp);
+        if (bmp) paint(bmp, false);
         else setMissing(true);
+      });
+    // Zoomed in: swap in the full-size decode when it's ready.
+    if (view && !full)
+      loadFull(item).then((bmp) => {
+        if (alive && bmp) paint(bmp, true);
       });
     return () => {
       alive = false;
     };
-  }, [item, width, height]);
+  }, [item, width, height, view, onAspect]);
 
   return (
     <>

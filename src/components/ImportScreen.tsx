@@ -145,16 +145,33 @@ export function ImportScreen({ onOpen, resume }: Props) {
       inputRef.current?.click();
       return;
     }
+    const asked = performance.now();
+    let handle: FileSystemDirectoryHandle;
     try {
-      const handle = await (window as unknown as { showDirectoryPicker: (o?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({
+      handle = await (window as unknown as { showDirectoryPicker: (o?: object) => Promise<FileSystemDirectoryHandle> }).showDirectoryPicker({
         id: 'burst-shoot',
         mode: 'read',
       });
+    } catch (e) {
+      const name = (e as DOMException)?.name;
+      // Some browsers expose the folder picker but block it (embedded app browsers, iframes,
+      // strict privacy settings): it fails, or "cancels" before a dialog could even show.
+      // Fall back to the plain folder upload input, which works everywhere.
+      const blocked = name === 'SecurityError' || name === 'NotAllowedError' || name === 'TypeError' || (name === 'AbortError' && performance.now() - asked < 400);
+      if (blocked) {
+        inputRef.current?.click();
+        // If that is blocked too (e.g. an automation extension intercepts every file dialog on
+        // this tab), the input opens nothing either: say so instead of doing nothing.
+        setError('Your browser didn’t open the folder dialog. Drag the folder onto this page instead, or open Burst Bud in a new tab without browser-automation extensions attached.');
+      } else if (name !== 'AbortError') setError(String((e as Error)?.message ?? e));
+      return;
+    }
+    try {
       setProgress('Scanning folder…');
       const scan = await scanDirectoryHandle(handle, true, (n) => setProgress(`Scanning folder… ${n} files`));
       await ingest(scan, handle);
     } catch (e) {
-      if ((e as DOMException)?.name !== 'AbortError') setError(String((e as Error)?.message ?? e));
+      setError(String((e as Error)?.message ?? e));
       setProgress(null);
     }
   }
@@ -275,6 +292,7 @@ export function ImportScreen({ onOpen, resume }: Props) {
             webkitdirectory=""
             onChange={async (e) => {
               if (!e.target.files?.length) return;
+              setError(null);
               setProgress('Scanning folder…');
               await ingest(scanFileList(e.target.files, true));
               e.target.value = '';

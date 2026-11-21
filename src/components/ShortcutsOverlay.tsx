@@ -20,11 +20,14 @@ interface Mini {
   pill: string | null;
   tap: number | null; // Overview cell being clicked
   toast: string | null;
+  zoom: boolean;
+  /** Focus-mode demos: the app's bars and the browser's own chrome around the timeline. */
+  chrome: { bars: boolean; browser: boolean } | null;
   /** Just reset for a new loop: jump there without animating. */
   fresh: boolean;
 }
 
-const BASE: Mini = { frame: 3, kept: [], sweep: 'none', burst: 0, dir: 1, view: 'timeline', key: null, keyDown: false, pointer: null, pill: null, tap: null, toast: null, fresh: true };
+const BASE: Mini = { frame: 3, kept: [], sweep: 'none', burst: 0, dir: 1, view: 'timeline', key: null, keyDown: false, pointer: null, pill: null, tap: null, toast: null, zoom: false, chrome: null, fresh: true };
 
 type Step = [at: number, patch: Partial<Mini>];
 
@@ -127,6 +130,32 @@ const GROUPS: Array<{ title: string; items: Shortcut[] }> = [
         start: { view: 'grid' },
         length: 4200,
         steps: [[700, { tap: 5 }], [1100, { view: 'timeline', frame: 5, dir: 1, tap: null }], ...press(2700, 'Esc', { view: 'grid' })],
+      },
+      {
+        id: 'zoom',
+        keys: ['Z'],
+        label: 'Zoom to 100% / back to fit',
+        hint: 'Or double-click. Pinch to zoom, drag to look around; stays zoomed as you step frames',
+        length: 5000,
+        steps: [...press(600, 'Z', { zoom: true, pill: '100%' }), ...press(1800, '→', { frame: 4 }), ...press(2600, '→', { frame: 5 }), ...press(3700, 'Z', { zoom: false, pill: null })],
+      },
+      {
+        id: 'focus',
+        keys: ['F'],
+        label: 'Focus mode',
+        hint: 'Hides the top bar and filmstrip so the photo gets the room',
+        start: { chrome: { bars: true, browser: true } },
+        length: 4200,
+        steps: [...press(700, 'F', { chrome: { bars: false, browser: true } }), ...press(2700, 'F', { chrome: { bars: true, browser: true } })],
+      },
+      {
+        id: 'fullscreen',
+        keys: ['⇧', 'F'],
+        label: 'Full screen',
+        hint: 'Esc leaves it too',
+        start: { chrome: { bars: false, browser: true } },
+        length: 4200,
+        steps: [...press(700, '⇧ F', { chrome: { bars: false, browser: false } }), ...press(2700, '⇧ F', { chrome: { bars: false, browser: true } })],
       },
       { id: 'help', keys: ['/'], label: 'Show these shortcuts', hint: 'Tap to open, hold to peek', length: 1, steps: [] },
     ],
@@ -231,7 +260,28 @@ function MiniStage({ mini, help, showBurst }: { mini: Mini; help: boolean; showB
   const kept = (i: number) => mini.kept.includes(i);
 
   return (
-    <div className={`mini${mini.sweep !== 'none' ? ` sweep-${mini.sweep}` : ''}${mini.fresh ? ' fresh' : ''}`}>
+    <div
+      className={`mini${mini.sweep !== 'none' ? ` sweep-${mini.sweep}` : ''}${mini.fresh ? ' fresh' : ''}${mini.chrome ? ' with-chrome' : ''}${mini.chrome && !mini.chrome.bars ? ' bars-off' : ''}${mini.chrome && !mini.chrome.browser ? ' browser-off' : ''}`}
+    >
+      {mini.chrome && (
+        <>
+          <div className="mini-browser">
+            <i />
+            <i />
+            <i />
+          </div>
+          <div className="mini-topbar">
+            <b />
+            <span />
+            <span />
+          </div>
+          <div className="mini-film">
+            {Array.from({ length: 10 }, (_, i) => (
+              <span key={i} className={i === 0 ? 'on' : undefined} />
+            ))}
+          </div>
+        </>
+      )}
       {mini.view === 'timeline' ? (
         <div className={`mini-burst ${mini.dir > 0 ? 'from-right' : 'from-left'}`} key={`b${mini.burst}`}>
           {showBurst && (
@@ -246,7 +296,7 @@ function MiniStage({ mini, help, showBurst }: { mini: Mini; help: boolean; showB
                 {frame + k < n && <MiniTile frame={frame + k} burst={mini.burst} className={`mini-sliver right${kept(frame + k) ? ' kept' : ''}`} style={{ ['--k' as string]: k }} />}
               </span>
             ))}
-            <MiniTile frame={frame} burst={mini.burst} className={`mini-photo${kept(frame) ? ' kept' : ''}`}>
+            <MiniTile frame={frame} burst={mini.burst} className={`mini-photo${kept(frame) ? ' kept' : ''}${mini.zoom ? ' zoomed' : ''}`}>
               {kept(frame) && <span className="mini-badge" key={`k${frame}`}>✓ Kept</span>}
               {mini.pill && <span className="mini-pill">{mini.pill}</span>}
               {mini.pointer && (

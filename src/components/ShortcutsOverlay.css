@@ -145,3 +145,31 @@
 
 /* A demo loop restarting jumps straight to its start state (no reverse sweep or slide). */
 .mini.fresh *, .mini.fresh *::before, .mini.fresh *::after { transition: none !important; animation: none !important; }
+
+/* Zoom demo: the photo fills with a close crop. */
+.mini-photo { overflow: hidden; }
+.mini-photo::before { transition: background-size 600ms var(--ease-out); }
+.mini-photo.zoomed::before { background-size: auto 520%; }
+.mini-photo.zoomed .mini-pill { background: var(--bg); color: var(--text); }
+
+/* Focus / full screen demos: browser chrome, top bar and filmstrip around the timeline. */
+.mini-browser, .mini-topbar, .mini-film {
+  position: absolute; left: 0; right: 0; z-index: 25; display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  transition: transform 600ms var(--ease-out), opacity 500ms var(--ease-out);
+}
+.mini-browser { top: 0; height: 18px; background: #1c2633; }
+.mini-browser i { width: 6px; height: 6px; border-radius: 50%; background: #3a4a5e; }
+.mini-topbar { top: 18px; height: 22px; border-bottom: 1px solid var(--line); background: var(--bg); }
+.mini-topbar b { width: 38px; height: 6px; border-radius: 2px; background: var(--text); opacity: 0.8; }
+.mini-topbar span { width: 26px; height: 8px; border-radius: 2px; background: var(--btn); }
+.mini-topbar span:last-child { margin-left: auto; background: var(--accent); opacity: 0.7; }
+.mini-film { bottom: 0; height: 30px; gap: 3px; background: var(--bg); }
+.mini-film span { flex: 1; height: 14px; border-radius: 2px; background: var(--bar); }
+.mini-film span.on { background: var(--accent); }
+.mini.with-chrome .mini-burst { top: 22px; transition: scale 600ms var(--ease-out), translate 600ms var(--ease-out); }
+.mini.with-chrome .mini-strip { bottom: 70px; }
+.mini.bars-off .mini-topbar { transform: translateY(-40px); opacity: 0; }
+.mini.bars-off .mini-film { transform: translateY(30px); opacity: 0; }
+.mini.bars-off .mini-burst { scale: 1.12; translate: 0 -6px; }
+.mini.browser-off .mini-browser { transform: translateY(-18px); opacity: 0; }
+.mini.bars-off.browser-off .mini-burst { scale: 1.2; translate: 0 -14px; }

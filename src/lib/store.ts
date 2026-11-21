@@ -35,7 +35,8 @@ type Action =
   | { type: 'filter'; filter: Filter }
   | { type: 'focus'; groupId: string | null }
   | { type: 'cursor'; groupId: string; itemId: string }
-  | { type: 'dismissToast' };
+  | { type: 'dismissToast' }
+  | { type: 'notice'; text: string };
 
 const initial: State = {
   status: {},
@@ -96,6 +97,8 @@ function reducer(state: State, a: Action): State {
       return { ...state, cursor: { ...state.cursor, [a.groupId]: a.itemId } };
     case 'dismissToast':
       return { ...state, toast: null };
+    case 'notice':
+      return { ...state, toast: { id: ++toastSeq, text: a.text, undoable: false } };
   }
 }
 

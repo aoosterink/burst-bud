@@ -22,6 +22,8 @@ Test data:
 - **Import**: pick a folder (Chrome/Edge/Arc use the File System Access picker; other browsers fall back to a folder upload input). Subfolders are walked recursively. JPG/PNG/WebP/AVIF/HEIC, RAW (a RAW with a same-named JPG is attached to it rather than shown twice) and videos.
 - **Bursts**: photos are sorted by EXIF `DateTimeOriginal` + `SubSecTimeOriginal` (file date when missing). A new burst starts when the gap to the previous photo is greater than the burst gap, or when the folder changes. Videos are never grouped.
 - **Review**: press and hold the photo and slide toward either edge to seek through the burst; release to stop. Also: drag the bar under the strip, scroll/trackpad, ← →.
+- **Zoom**: Z or double-click goes to 100% (one photo pixel per screen pixel) around the pointer; pinch or ⌘/Ctrl-scroll zooms freely, drag or scroll pans, Z/Esc back to fit. Zoom stays put while stepping frames in a burst, to compare sharpness.
+- **Room for the photo**: the frame takes the photo's own shape (portrait photos get a tall frame); Keep / Archive sit inside the photo and show on hover. F hides the top bar and filmstrip (remembered), ⇧F toggles browser full screen.
 - **Labels**: Keep (K), archive the unkept rest of a burst (A), or archive every unkept photo in the shoot. Every action is undoable (⌘Z or the toast). Labels are saved in localStorage per folder.
 
 ## Code map

@@ -39,6 +39,15 @@ const thumbQueue = new LifoQueue(4);
 const previewQueue = new LifoQueue(3);
 
 const thumbs = new Map<string, string | null>();
+
+/** Width / height of each photo (as displayed, after EXIF rotation), learned from any decode. */
+const aspects = new Map<string, number>();
+/** Full pixel size, known once the photo was decoded at full resolution (for zoom). */
+const naturals = new Map<string, { w: number; h: number }>();
+const noteAspect = (id: string, bmp: ImageBitmap) => aspects.set(id, bmp.width / bmp.height);
+
+export const aspectOf = (id: string): number | undefined => aspects.get(id);
+export const naturalSizeOf = (id: string) => naturals.get(id);
 const thumbWaiters = new Map<string, Promise<string | null>>();
 
 async function decode(file: File, width?: number): Promise<ImageBitmap | null> {
@@ -83,6 +92,7 @@ export function loadThumb(item: MediaItem): Promise<string | null> {
       // Reuse a decoded preview if we already have one: far cheaper than decoding again.
       const cached = previews.get(item.id);
       const bmp = cached ?? (await decode(item.file, THUMB_W));
+      if (bmp) noteAspect(item.id, bmp);
       const url = bmp ? await bitmapToUrl(bmp, THUMB_W) : null;
       if (bmp && !cached) bmp.close();
       thumbs.set(item.id, url);
@@ -124,6 +134,7 @@ export function loadPreview(item: MediaItem): Promise<ImageBitmap | null> {
     previewQueue.push(async () => {
       const bmp = await decode(item.file, previewWidth);
       if (bmp) {
+        noteAspect(item.id, bmp);
         previews.set(item.id, bmp);
         while (previews.size > MAX_PREVIEWS) {
           const [oldId, old] = previews.entries().next().value as [string, ImageBitmap];
@@ -150,7 +161,54 @@ export function prefetchAround(items: MediaItem[], index: number, radius = 24) {
   for (const it of order) if (!previews.has(it.id)) loadPreview(it);
 }
 
+// ---- full resolution (zoom) ----
+// Only a few: a 24 MP photo is ~96 MB decoded. Current frame plus its neighbours.
+
+const MAX_FULL = 3;
+const fulls = new Map<string, ImageBitmap>();
+const fullWaiters = new Map<string, Promise<ImageBitmap | null>>();
+const fullQueue = new LifoQueue(1);
+
+export function peekFull(id: string): ImageBitmap | undefined {
+  const bmp = fulls.get(id);
+  if (bmp) {
+    fulls.delete(id);
+    fulls.set(id, bmp);
+  }
+  return bmp;
+}
+
+export function loadFull(item: MediaItem): Promise<ImageBitmap | null> {
+  const hit = peekFull(item.id);
+  if (hit) return Promise.resolve(hit);
+  const pending = fullWaiters.get(item.id);
+  if (pending) return pending;
+  const p = new Promise<ImageBitmap | null>((resolve) => {
+    fullQueue.push(async () => {
+      const bmp = await decode(item.file);
+      if (bmp) {
+        noteAspect(item.id, bmp);
+        naturals.set(item.id, { w: bmp.width, h: bmp.height });
+        fulls.set(item.id, bmp);
+        while (fulls.size > MAX_FULL) {
+          const [oldId, old] = fulls.entries().next().value as [string, ImageBitmap];
+          fulls.delete(oldId);
+          old.close();
+        }
+      }
+      fullWaiters.delete(item.id);
+      resolve(bmp);
+    });
+  });
+  fullWaiters.set(item.id, p);
+  return p;
+}
+
 export function clearImageCaches() {
+  for (const bmp of fulls.values()) bmp.close();
+  fulls.clear();
+  aspects.clear();
+  naturals.clear();
   for (const url of thumbs.values()) if (url) URL.revokeObjectURL(url);
   thumbs.clear();
   for (const bmp of previews.values()) bmp.close();

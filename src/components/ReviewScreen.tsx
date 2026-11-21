@@ -13,6 +13,14 @@ import { canSavePicks } from '../lib/savePicks';
 
 type View = 'timeline' | 'overview';
 const VIEW_KEY = 'burst:view';
+const FOCUS_KEY = 'burst:focus';
+const readFocus = () => {
+  try {
+    return localStorage.getItem(FOCUS_KEY) === '1';
+  } catch {
+    return false;
+  }
+};
 const readView = (): View => {
   try {
     return localStorage.getItem(VIEW_KEY) === 'overview' ? 'overview' : 'timeline';
@@ -207,6 +215,36 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     [statusOf, dispatch],
   );
 
+  // Focus mode (no top bar, no filmstrip) and browser fullscreen ------------
+  const [focusMode, setFocusModeState] = useState(readFocus);
+  const setFocusMode = useCallback((on: boolean) => {
+    setFocusModeState(on);
+    try {
+      localStorage.setItem(FOCUS_KEY, on ? '1' : '0');
+    } catch {
+      /* not essential */
+    }
+  }, []);
+  const [fullscreen, setFullscreen] = useState(() => !!document.fullscreenElement);
+  useEffect(() => {
+    const on = () => setFullscreen(!!document.fullscreenElement);
+    document.addEventListener('fullscreenchange', on);
+    return () => document.removeEventListener('fullscreenchange', on);
+  }, []);
+  const fullscreenSupported = typeof document.documentElement.requestFullscreen === 'function';
+  const toggleFullscreen = useCallback(() => {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(() => {});
+      return;
+    }
+    // Chrome refuses when the tab isn't in front, inside some embedded browsers, or while a
+    // debugging / automation extension controls the tab. Say so instead of doing nothing.
+    document.documentElement.requestFullscreen?.().catch(() =>
+      dispatch({ type: 'notice', text: 'The browser didn’t allow full screen here. Try ⌃⌘F (or the green window button), or a tab without automation extensions attached.' }),
+    );
+  }, [dispatch]);
+  const [zoomed, setZoomed] = useState(false);
+
   // Keyboard ---------------------------------------------------------------
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -223,10 +261,16 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         setView(view === 'overview' ? 'timeline' : 'overview');
         return;
       }
+      if (e.key === 'f' || e.key === 'F') {
+        if (e.shiftKey) toggleFullscreen();
+        else setFocusMode(!focusMode);
+        return;
+      }
       if (view === 'overview') {
         if (e.key === 'Escape') setView('timeline');
         return; // the timeline's keys don't apply to the grid
       }
+      if (e.key === 'Escape' && zoomed) return; // the stage leaves zoom first
       if (e.key === 'Escape' && fromOverview) {
         setView('overview');
         return;
@@ -275,7 +319,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen, fromOverview, undo]);
+  }, [focused, frameIndex, setFrame, moveGroup, toggleKeep, archiveRestOfGroup, dispatch, view, setView, shortcutsOpen, fromOverview, undo, focusMode, setFocusMode, toggleFullscreen, zoomed]);
 
   // Toast stays mounted briefly after it's dismissed so it can animate out.
   const [toastShown, setToastShown] = useState(state.toast);
@@ -307,7 +351,23 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
   const archivedInFocused = focused ? focused.items.filter((id) => statusOf(id) === 'archived') : [];
 
   return (
-    <div className="review">
+    <div className={`review${focusMode ? ' focus' : ''}`}>
+      {focusMode && (
+        <div className="focus-bar" role="toolbar" aria-label="Focus mode">
+          <button className="icon-btn" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (/)" aria-label="Keyboard shortcuts">
+            <ShortcutsIcon />
+          </button>
+          <button className="icon-btn" onClick={() => setFocusMode(false)} title="Show the top bar and filmstrip (F)" aria-label="Leave focus mode" aria-pressed>
+            <FocusIcon on />
+          </button>
+          {fullscreenSupported && (
+            <button className="icon-btn" onClick={toggleFullscreen} title={fullscreen ? 'Leave full screen (⇧F)' : 'Full screen (⇧F)'} aria-label={fullscreen ? 'Leave full screen' : 'Full screen'} aria-pressed={fullscreen}>
+              <FullscreenIcon on={fullscreen} />
+            </button>
+          )}
+        </div>
+      )}
+      {!focusMode && (
       <header className="appbar review-bar">
         <strong className="logo">Burst Bud</strong>
         <div className="shoot">
@@ -380,10 +440,24 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
               <path d="M10.5 11 13.5 8l-3-3" />
               <path d="M13.5 8H6" />
             </svg>
-            Exit
+            <span className="exit-label">Exit</span>
           </button>
+          <div className="icon-group">
+            <button className="icon-btn" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (tap / to open, hold / to peek)" aria-label="Keyboard shortcuts">
+              <ShortcutsIcon />
+            </button>
+            <button className="icon-btn" onClick={() => setFocusMode(true)} title="Focus mode: hide the top bar and filmstrip (F)" aria-label="Focus mode">
+              <FocusIcon />
+            </button>
+            {fullscreenSupported && (
+              <button className="icon-btn" onClick={toggleFullscreen} title={fullscreen ? 'Leave full screen (⇧F)' : 'Full screen (⇧F)'} aria-label={fullscreen ? 'Leave full screen' : 'Full screen'} aria-pressed={fullscreen}>
+                <FullscreenIcon on={fullscreen} />
+              </button>
+            )}
+          </div>
         </div>
       </header>
+      )}
 
       {view === 'overview' ? (
         <Overview
@@ -422,6 +496,35 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
           onHoldChange={() => {}}
           sweeping={sweeping}
           viewKey={state.filter}
+          keysEnabled={!shortcutsOpen && !saving && !confirmArchiveAll}
+          onZoomChange={setZoomed}
+          actions={
+            <>
+              <button className={`primary${isKept ? ' is-kept' : ''}`} onClick={toggleKeep} aria-pressed={isKept}>
+                {isKept ? '✓ Kept' : <>+ Keep<span className="lbl-long"> {current.kind}</span></>} <kbd>Space</kbd>
+              </button>
+              <button className="btn" onClick={archiveRestOfGroup} disabled={!unkeptInFocused.length}>
+                {focused.kind === 'video' ? (
+                  <>Archive<span className="lbl-long"> video</span></>
+                ) : unkeptInFocused.length ? (
+                  <>Archive {unkeptInFocused.length}<span className="lbl-long"> not kept</span></>
+                ) : (
+                  <>Nothing<span className="lbl-long"> to archive</span></>
+                )}{' '}
+                <kbd>A</kbd>
+              </button>
+              {archivedInFocused.length > 0 && (
+                <button className="restore-link" onClick={() => restore(archivedInFocused)} title="Bring this burst's archived photos back into the timeline" aria-label={`Restore ${archivedInFocused.length} archived`}>
+                  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5.5 3 2.5 6l3 3" />
+                    <path d="M2.5 6H10a3.5 3.5 0 0 1 0 7H6" />
+                  </svg>
+                  <span className="lbl-long">Restore </span>
+                  {archivedInFocused.length}
+                </button>
+              )}
+            </>
+          }
         />
       ) : (
         <div className="stage empty">
@@ -434,38 +537,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         </div>
       )}
 
-      <section className="controls">
-        {current && focused ? (
-          <>
-            <div />
-            <div className="actions">
-              <button className={`primary${isKept ? ' is-kept' : ''}`} onClick={toggleKeep} aria-pressed={isKept}>
-                {isKept ? '✓ Kept' : `+ Keep ${current.kind}`} <kbd>Space</kbd>
-              </button>
-              <button className="btn" onClick={archiveRestOfGroup} disabled={!unkeptInFocused.length}>
-                {focused.kind === 'video' ? 'Archive video' : unkeptInFocused.length ? `Archive ${unkeptInFocused.length} not kept` : 'Nothing to archive'} <kbd>A</kbd>
-              </button>
-            </div>
-            <div className="restore-slot">
-              {archivedInFocused.length > 0 && (
-                <button className="restore-link" onClick={() => restore(archivedInFocused)} title="Bring this burst's archived photos back into the timeline">
-                  <svg width="13" height="13" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M5.5 3 2.5 6l3 3" />
-                    <path d="M2.5 6H10a3.5 3.5 0 0 1 0 7H6" />
-                  </svg>
-                  Restore {archivedInFocused.length} archived
-                </button>
-              )}
-              <button className="btn subtle shortcuts" onClick={() => setShortcutsOpen(true)} title="Keyboard shortcuts (tap / to open, hold / to peek)">
-                Shortcuts <kbd>/</kbd>
-              </button>
-            </div>
-          </>
-        ) : (
-          <div />
-        )}
-      </section>
-
+      {!focusMode && (
       <Navigator
         groups={visibleGroups}
         focusedId={focused?.id}
@@ -475,6 +547,7 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         onSeek={seekShoot}
         onStep={moveGroup}
       />
+      )}
       </>
       )}
 
@@ -518,5 +591,32 @@ export function ReviewScreen({ shoot, initialGapMs, folderHandle, onImport }: Pr
         </div>
       )}
     </div>
+  );
+}
+
+function ShortcutsIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
+      <path d="M4.5 6.5h1M7.5 6.5h1M10.5 6.5h1M5 9.5h6" />
+    </svg>
+  );
+}
+
+function FocusIcon({ on = false }: { on?: boolean }) {
+  // A window with its top and bottom bars: solid while they show, dashed once hidden.
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" />
+      <path d="M1.5 5.5h13M1.5 10.5h13" strokeDasharray={on ? '1.5 2' : undefined} />
+    </svg>
+  );
+}
+
+function FullscreenIcon({ on = false }: { on?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      {on ? <path d="M6 2v4H2M10 2v4h4M6 14v-4H2M10 14v-4h4" /> : <path d="M2 6V2h4M14 6V2h-4M2 10v4h4M14 10v4h-4" />}
+    </svg>
   );
 }
